@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 import "./VotesTokenWithSupply.sol";
-import "./mocks/MVD/interfaces/IModuleFactory.sol";
+import "fractal-contracts-package/interfaces/IModuleFactory.sol";
 
 /// @notice Token Factory used to deploy votes tokens
 contract TokenFactory is IModuleFactory, ERC165 {
