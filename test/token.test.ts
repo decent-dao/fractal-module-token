@@ -1,9 +1,5 @@
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import {
-  AccessControl,
-  AccessControl__factory,
-  DAO,
-  DAO__factory,
   VotesTokenWithSupply,
   VotesTokenWithSupply__factory,
   IModuleFactory__factory,
@@ -12,37 +8,24 @@ import {
 } from "../typechain-types";
 import chai from "chai";
 import { ethers } from "hardhat";
-import { BigNumber } from "ethers";
 import getInterfaceSelector from "./helpers/getInterfaceSelector";
 
 const expect = chai.expect;
 
 describe("Token Factory", function () {
-  let dao: DAO;
-  let accessControl: AccessControl;
   let tokenFactory: TokenFactory;
   let token: VotesTokenWithSupply;
 
   // eslint-disable-next-line camelcase
-  let erc20TokenAlpha: VotesTokenWithSupply;
-  let erc20TokenBravo: VotesTokenWithSupply;
   let deployer: SignerWithAddress;
-  let withdrawer: SignerWithAddress;
+  let dao: SignerWithAddress;
   let userA: SignerWithAddress;
   let userB: SignerWithAddress;
-  let upgrader: SignerWithAddress;
-
-  // Roles
-  const daoRoleString = "DAO_ROLE";
-  const withdrawerRoleString = "WITHDRAWER_ROLE";
-  const upgraderRoleString = "UPGRADER_ROLE";
 
   describe("Token / Factory", function () {
     beforeEach(async function () {
-      [deployer, withdrawer, userA, userB, upgrader] =
-        await ethers.getSigners();
+      [deployer, dao, userA, userB] = await ethers.getSigners();
 
-      dao = await new DAO__factory(deployer).deploy();
       tokenFactory = await new TokenFactory__factory(deployer).deploy();
 
       const abiCoder = new ethers.utils.AbiCoder();
