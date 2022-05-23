@@ -2,7 +2,7 @@ import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import {
   VotesTokenWithSupply,
   VotesTokenWithSupply__factory,
-  IModuleFactory__factory,
+  ITokenFactory__factory,
   TokenFactory,
   TokenFactory__factory,
 } from "../typechain-types";
@@ -103,7 +103,7 @@ describe("Token Factory", function () {
       expect(
         await tokenFactory.supportsInterface(
           // eslint-disable-next-line camelcase
-          getInterfaceSelector(IModuleFactory__factory.createInterface())
+          getInterfaceSelector(ITokenFactory__factory.createInterface())
         )
       ).to.eq(true);
 

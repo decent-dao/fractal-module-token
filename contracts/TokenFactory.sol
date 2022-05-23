@@ -2,14 +2,15 @@
 pragma solidity ^0.8.0;
 
 import "./VotesTokenWithSupply.sol";
-import "fractal-contracts-package/interfaces/IModuleFactory.sol";
+import "./interfaces/ITokenFactory.sol";
 
 /// @notice Token Factory used to deploy votes tokens
-contract TokenFactory is IModuleFactory, ERC165 {
+contract TokenFactory is ITokenFactory, ERC165 {
+
     /// @dev Creates an ERC-20 votes token
     /// @param data The array of bytes used to create the token
     /// @return address The address of the created token
-    function create(bytes[] calldata data) external returns (address[] memory) {
+    function create(bytes[] calldata data) external override returns (address[] memory) {
         address[] memory createdContracts = new address[](1);
 
         address treasury = abi.decode(data[0], (address));
@@ -40,11 +41,11 @@ contract TokenFactory is IModuleFactory, ERC165 {
         public
         view
         virtual
-        override
+        override(ERC165)
         returns (bool)
     {
         return
-            interfaceId == type(IModuleFactory).interfaceId ||
+            interfaceId == type(ITokenFactory).interfaceId ||
             super.supportsInterface(interfaceId);
     }
 }
