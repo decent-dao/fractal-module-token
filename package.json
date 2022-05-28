@@ -1,6 +1,6 @@
 {
-  "name": "token-module",
-  "version": "0.2.0",
+  "name": "@fractal-framework/votes-token",
+  "version": "0.1.0",
   "scripts": {
     "clean": "hardhat clean",
     "compile": "hardhat compile",
