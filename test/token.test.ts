@@ -30,20 +30,22 @@ describe("Token Factory", function () {
 
       const abiCoder = new ethers.utils.AbiCoder();
       const data = [
-        abiCoder.encode(["address"], [dao.address]),
         abiCoder.encode(["string"], ["DECENT"]),
         abiCoder.encode(["string"], ["DCNT"]),
-        abiCoder.encode(["address[]"], [[userA.address, userB.address]]),
+        abiCoder.encode(
+          ["address[]"],
+          [[dao.address, userA.address, userB.address]]
+        ),
         abiCoder.encode(
           ["uint256[]"],
           [
             [
+              ethers.utils.parseUnits("800", 18),
               ethers.utils.parseUnits("100", 18),
               ethers.utils.parseUnits("100", 18),
             ],
           ]
         ),
-        abiCoder.encode(["uint256"], [ethers.utils.parseUnits("1000", 18)]),
       ];
 
       const result = await tokenFactory.callStatic.create(data);
@@ -79,20 +81,22 @@ describe("Token Factory", function () {
     it("Token Factory does not deploy with incorrect data", async () => {
       const abiCoder = new ethers.utils.AbiCoder();
       const data = [
-        abiCoder.encode(["address"], [dao.address]),
         abiCoder.encode(["address"], [userA.address]),
         abiCoder.encode(["string"], ["DCNT"]),
-        abiCoder.encode(["address[]"], [[userA.address, userB.address]]),
+        abiCoder.encode(
+          ["address[]"],
+          [[dao.address, userA.address, userB.address]]
+        ),
         abiCoder.encode(
           ["uint256[]"],
           [
             [
+              ethers.utils.parseUnits("800", 18),
               ethers.utils.parseUnits("100", 18),
               ethers.utils.parseUnits("100", 18),
             ],
           ]
         ),
-        abiCoder.encode(["uint256"], [ethers.utils.parseUnits("1000", 18)]),
       ];
 
       // const result = await tokenFactory.callStatic.create(data);
