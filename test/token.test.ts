@@ -73,8 +73,8 @@ describe("Token Factory", function () {
         ),
         ethers.utils.solidityKeccak256(
           ["bytes", "bytes"],
-          // eslint-disable-next-line camelcase
           [
+            // eslint-disable-next-line camelcase
             VotesTokenWithSupply__factory.bytecode,
             abiCoder.encode(
               ["string", "string", "address[]", "uint256[]"],
