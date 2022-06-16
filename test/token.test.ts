@@ -46,6 +46,7 @@ describe("Token Factory", function () {
             ],
           ]
         ),
+        abiCoder.encode(["bytes32"], [ethers.utils.formatBytes32String("hi")]),
       ];
 
       const result = await tokenFactory.callStatic.create(data);
@@ -59,6 +60,41 @@ describe("Token Factory", function () {
       expect(tokenFactory.address).to.be.properAddress;
       // eslint-disable-next-line no-unused-expressions
       expect(token.address).to.be.properAddress;
+    });
+
+    it("Can predict Token Address", async () => {
+      const { chainId } = await ethers.provider.getNetwork();
+      const abiCoder = new ethers.utils.AbiCoder();
+      const predictedToken = ethers.utils.getCreate2Address(
+        tokenFactory.address,
+        ethers.utils.solidityKeccak256(
+          ["address", "uint256", "bytes32"],
+          [deployer.address, chainId, ethers.utils.formatBytes32String("hi")]
+        ),
+        ethers.utils.solidityKeccak256(
+          ["bytes", "bytes"],
+          [
+            // eslint-disable-next-line camelcase
+            VotesTokenWithSupply__factory.bytecode,
+            abiCoder.encode(
+              ["string", "string", "address[]", "uint256[]"],
+              [
+                "DECENT",
+                "DCNT",
+                [dao.address, userA.address, userB.address],
+                [
+                  ethers.utils.parseUnits("800", 18),
+                  ethers.utils.parseUnits("100", 18),
+                  ethers.utils.parseUnits("100", 18),
+                ],
+              ]
+            ),
+          ]
+        )
+      );
+
+      // eslint-disable-next-line no-unused-expressions
+      expect(token.address).to.eq(predictedToken);
     });
 
     it("Init is correct", async () => {
