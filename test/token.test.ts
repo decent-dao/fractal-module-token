@@ -9,12 +9,14 @@ import {
 import chai from "chai";
 import { ethers } from "hardhat";
 import getInterfaceSelector from "./helpers/getInterfaceSelector";
+import { ContractTransaction } from "ethers";
 
 const expect = chai.expect;
 
 describe("Token Factory", function () {
   let tokenFactory: TokenFactory;
   let token: VotesTokenWithSupply;
+  let tx: ContractTransaction;
 
   // eslint-disable-next-line camelcase
   let deployer: SignerWithAddress;
@@ -50,7 +52,7 @@ describe("Token Factory", function () {
       ];
 
       const result = await tokenFactory.callStatic.create(data);
-      await tokenFactory.create(data);
+      tx = await tokenFactory.create(data);
       // eslint-disable-next-line camelcase
       token = VotesTokenWithSupply__factory.connect(result[0], deployer);
     });
@@ -60,6 +62,9 @@ describe("Token Factory", function () {
       expect(tokenFactory.address).to.be.properAddress;
       // eslint-disable-next-line no-unused-expressions
       expect(token.address).to.be.properAddress;
+      await expect(tx)
+        .to.emit(tokenFactory, "TokenCreated")
+        .withArgs(token.address);
     });
 
     it("Can predict Token Address", async () => {
