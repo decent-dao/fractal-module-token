@@ -2,6 +2,8 @@
 pragma solidity ^0.8.0;
 
 interface ITokenFactory {
+    event TokenCreated(address indexed tokenAddress);
+
     /// @dev Creates a module
     /// @param data The array of bytes used to create the module
     /// @return address[] Array of the created module addresses

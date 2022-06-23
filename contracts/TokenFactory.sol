@@ -32,6 +32,8 @@ contract TokenFactory is ITokenFactory, ERC165 {
             )
         );
 
+        emit TokenCreated(createdContracts[0]);
+
         return createdContracts;
     }
 
