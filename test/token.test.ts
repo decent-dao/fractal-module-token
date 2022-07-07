@@ -51,8 +51,11 @@ describe("Token Factory", function () {
         abiCoder.encode(["bytes32"], [ethers.utils.formatBytes32String("hi")]),
       ];
 
-      const result = await tokenFactory.callStatic.create(data);
-      tx = await tokenFactory.create(data);
+      const result = await tokenFactory.callStatic.create(
+        deployer.address,
+        data
+      );
+      tx = await tokenFactory.create(deployer.address, data);
       // eslint-disable-next-line camelcase
       token = VotesTokenWithSupply__factory.connect(result[0], deployer);
     });
@@ -73,8 +76,13 @@ describe("Token Factory", function () {
       const predictedToken = ethers.utils.getCreate2Address(
         tokenFactory.address,
         ethers.utils.solidityKeccak256(
-          ["address", "uint256", "bytes32"],
-          [deployer.address, chainId, ethers.utils.formatBytes32String("hi")]
+          ["address", "address", "uint256", "bytes32"],
+          [
+            deployer.address,
+            deployer.address,
+            chainId,
+            ethers.utils.formatBytes32String("hi"),
+          ]
         ),
         ethers.utils.solidityKeccak256(
           ["bytes", "bytes"],
@@ -141,7 +149,8 @@ describe("Token Factory", function () {
       ];
 
       // const result = await tokenFactory.callStatic.create(data);
-      await expect(tokenFactory.callStatic.create(data)).to.be.reverted;
+      await expect(tokenFactory.callStatic.create(deployer.address, data)).to.be
+        .reverted;
     });
 
     it("Supports the expected ERC165 interface", async () => {
