@@ -5,7 +5,8 @@ interface ITokenFactory {
     event TokenCreated(address indexed tokenAddress);
 
     /// @dev Creates a module
+    /// @param creator The address creating the module
     /// @param data The array of bytes used to create the module
     /// @return address[] Array of the created module addresses
-    function create(bytes[] calldata data) external returns (address[] memory);
+    function create(address creator, bytes[] calldata data) external returns (address[] memory);
 }
