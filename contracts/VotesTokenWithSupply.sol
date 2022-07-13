@@ -2,10 +2,13 @@
 pragma solidity ^0.8.0;
 
 import "./VotesToken.sol";
+// todo: shoudl be claimed and not just sent out
 
 /**
  * @dev Initilizes Supply of votesToken
  */
+ // We could simple deploy a token with a merkle root and allocation amount
+ // We could maintain a list of tokens which can be claimed from the token Factory?
 contract VotesTokenWithSupply is VotesToken {
     /**
     * @dev Mints tokens to hodlers w/ allocations 
