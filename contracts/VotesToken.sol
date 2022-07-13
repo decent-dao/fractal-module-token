@@ -19,6 +19,10 @@ abstract contract VotesToken is
         _registerInterface(type(IERC20).interfaceId);
     }
 
+    function captureSnapShot() external returns(uint snapId) {
+        snapId = _snapshot();
+    }
+
     // The functions below are overrides required by Solidity.
     function _mint(address to, uint256 amount)
         internal
