@@ -1,6 +1,7 @@
 pragma solidity ^0.8.0;
 import "./VotesToken.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "./TokenFactory.sol";
 
 contract ClaimToken {
     using SafeERC20 for IERC20;
@@ -11,8 +12,17 @@ contract ClaimToken {
     // how should the token even be created?
     // where do the tokens live? DAO or in claim contract
     // how to update for vesting functionality
-    function addTokenDrop(address token) public {
-        tokenSnapId[token] = VotesToken(token).captureSnapShot();
+    function addTokenDrop(address factory, address ptoken) public returns(address cToken) {
+        bytes[] memory tokenBytes = new bytes[](5);
+
+        tokenBytes[0] = abi.encode("name");
+        tokenBytes[1] = abi.encode("symbol");
+        tokenBytes[2] = abi.encode([address(this)]); // This should be dynamically generated so the claim contract works
+        tokenBytes[3] = abi.encode([100]);
+        tokenBytes[4] = abi.encode("salt");
+
+        cToken = TokenFactory(factory).create(msg.sender, tokenBytes)[0]; // create Token & create Hash
+        tokenSnapId[ptoken] = VotesToken(ptoken).captureSnapShot();
     }
 
     function claim(address token, address claimer) public {
