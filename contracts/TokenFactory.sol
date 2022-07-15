@@ -2,7 +2,8 @@
 pragma solidity ^0.8.0;
 
 import "./interfaces/ITokenFactory.sol";
-import "./VotesTokenWithSupply.sol";
+import "./VotesToken.sol";
+import "./ClaimToken.sol";
 import "@openzeppelin/contracts/utils/Create2.sol";
 
 /// @notice Token Factory used to deploy votes tokens
@@ -20,18 +21,21 @@ contract TokenFactory is ITokenFactory, ERC165 {
 
         string memory name = abi.decode(data[0], (string));
         string memory symbol = abi.decode(data[1], (string));
-        address[] memory hodlers = abi.decode(data[2], (address[]));
-        uint256[] memory allocations = abi.decode(data[3], (uint256[]));
+        uint totalSupply = abi.decode(data[2], (uint));
+        address claimContract = abi.decode(data[3], (address));
         bytes32 salt = abi.decode(data[4], (bytes32));
+        bytes32 merkleRoot = abi.decode(data[4], (bytes32));
 
         createdContracts[0] = Create2.deploy(
             0,
             keccak256(abi.encodePacked(creator, msg.sender, block.chainid, salt)),
             abi.encodePacked(
-                type(VotesTokenWithSupply).creationCode,
-                abi.encode(name, symbol, hodlers, allocations)
+                type(VotesToken).creationCode,
+                abi.encode(name, symbol, totalSupply, claimContract)
             )
         );
+
+        ClaimToken(claimContract).addMerkle(createdContracts[0], merkleRoot);
 
         emit TokenCreated(createdContracts[0]);
 
