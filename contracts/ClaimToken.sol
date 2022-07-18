@@ -23,8 +23,20 @@ contract ClaimToken {
     mapping(address => address) public findMyDaddy;
     mapping(address => MerkleInfo) public merkles;
 
+    ///////////////// Merkle And Swap //////////////////////////
+
+    function claimMerkleAndSnap(
+        address cToken,
+        address claimer,
+        uint256 amount,
+        bytes32[] calldata merkleProof
+    ) external {
+        claimMerkle(cToken, claimer, amount, merkleProof);
+        claimSnap(cToken, claimer);
+    }
+
     ///////////////////// Merkle ///////////////////////////////////////////
-    function addMerkle(address token, bytes32 merkleRoot) public {
+    function addMerkle(address token, bytes32 merkleRoot) external {
         require(
             merkles[token].merkleRoot == "",
             "This token has been initialized with a merkle root"
@@ -34,38 +46,31 @@ contract ClaimToken {
 
     function claimMerkle(
         address token,
-        address account,
+        address claimer,
         uint256 amount,
         bytes32[] calldata merkleProof
     ) public {
         require(
-            !merkles[token].isMerkleClaimed[account],
+            !merkles[token].isMerkleClaimed[claimer],
             "This allocation has been claimed"
         );
-        merkles[token].isMerkleClaimed[account] == true;
-        merkleVerify(token, account, amount, merkleProof);
-        IERC20(token).safeTransfer(account, amount);
+        merkles[token].isMerkleClaimed[claimer] == true;
+        merkleVerify(token, claimer, amount, merkleProof);
+        IERC20(token).safeTransfer(claimer, amount);
     }
 
     ////////////////////////// SnapShot //////////////////////////////////
-    function addTokenDrop(
-        address factory,
+    function addSnap(
         address pToken,
-        string memory name,
-        string memory symbol,
-        string memory salt,
-        uint256 totalSupply,
+        address cToken,
         uint256 pAllocation
-    ) public returns (address cToken) {
-        bytes[] memory tokenBytes = new bytes[](5);
-        tokenBytes[0] = abi.encode(name);
-        tokenBytes[1] = abi.encode(symbol);
-        tokenBytes[2] = abi.encode([address(this)]);
-        tokenBytes[3] = abi.encode([totalSupply]);
-        tokenBytes[4] = abi.encode(salt);
-
-        cToken = TokenFactory(factory).create(msg.sender, tokenBytes)[0]; // create Token & create Hash
-        cTokens[pToken][cToken].snapId = VotesToken(pToken).captureSnapShot();
+    ) external returns (uint256 snapId) {
+        require(
+            cTokens[pToken][cToken].snapId == 0,
+            "This token has already been initilized with a snapId"
+        );
+        snapId = VotesToken(pToken).captureSnapShot();
+        cTokens[pToken][cToken].snapId = snapId;
         cTokens[pToken][cToken].pAllocation = pAllocation;
         findMyDaddy[cToken] = pToken;
     }
