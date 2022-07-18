@@ -25,14 +25,16 @@ contract ClaimToken {
 
     ///////////////// Merkle And Swap //////////////////////////
 
-    function claimMerkleAndSnap(
-        address cToken,
-        address claimer,
-        uint256 amount,
-        bytes32[] calldata merkleProof
+    function batchClaimMerkleAndSnap(
+        address[] calldata cToken,
+        address[] calldata claimer,
+        uint256[] calldata amount,
+        bytes32[][] calldata merkleProof
     ) external {
-        claimMerkle(cToken, claimer, amount, merkleProof);
-        claimSnap(cToken, claimer);
+        for (uint256 i; i < cToken.length; i++) {
+            claimMerkle(cToken[i], claimer[i], amount[i], merkleProof[i]);
+            claimSnap(cToken[i], claimer[i]);
+        }
     }
 
     ///////////////////// Merkle ///////////////////////////////////////////
