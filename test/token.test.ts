@@ -1,21 +1,27 @@
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import {
-  VotesTokenWithSupply,
-  VotesTokenWithSupply__factory,
   ITokenFactory__factory,
   TokenFactory,
   TokenFactory__factory,
+  VotesToken,
+  VotesToken__factory,
+  ClaimToken,
+  ClaimToken__factory,
 } from "../typechain-types";
 import chai from "chai";
 import { ethers } from "hardhat";
 import getInterfaceSelector from "./helpers/getInterfaceSelector";
-import { ContractTransaction } from "ethers";
+import { BigNumber, BytesLike, ContractTransaction } from "ethers";
+import {MerkleTree} from "merkletreejs";
+import keccak256 from "keccak256";
+import { constructMerkleTree, makeLeaves } from "./helpers/airDropHelpers";
 
 const expect = chai.expect;
 
 describe("Token Factory", function () {
   let tokenFactory: TokenFactory;
-  let token: VotesTokenWithSupply;
+  let token: VotesToken;
+  let claimToken: ClaimToken;
   let tx: ContractTransaction;
 
   // eslint-disable-next-line camelcase
@@ -24,31 +30,46 @@ describe("Token Factory", function () {
   let userA: SignerWithAddress;
   let userB: SignerWithAddress;
 
-  describe("Token / Factory", function () {
+  let leaves: string[];
+  let merkleTree: MerkleTree;
+  let root: string;
+  let proof: BytesLike[];
+  let airdropClaimants: {
+    addr: string;
+    claim: BigNumber;
+  }[];
+
+  describe.only("Token / Factory", function () {
     beforeEach(async function () {
       [deployer, dao, userA, userB] = await ethers.getSigners();
 
       tokenFactory = await new TokenFactory__factory(deployer).deploy();
+      claimToken = await new ClaimToken__factory(deployer).deploy();
+
+      airdropClaimants = [
+        { addr: deployer.address, claim: ethers.utils.parseUnits("100", 18)},
+        { addr: userA.address, claim: ethers.utils.parseUnits("150", 18) },
+      ];
+  
+      // Prepare merkle tree of claimants
+      leaves = makeLeaves(airdropClaimants);
+      merkleTree = constructMerkleTree(leaves);
+
+      // Create tree
+      merkleTree = new MerkleTree(leaves, keccak256, {sortPairs: true})
+      root = merkleTree.getHexRoot();
 
       const abiCoder = new ethers.utils.AbiCoder();
       const data = [
         abiCoder.encode(["string"], ["DECENT"]),
         abiCoder.encode(["string"], ["DCNT"]),
-        abiCoder.encode(
-          ["address[]"],
-          [[dao.address, userA.address, userB.address]]
-        ),
-        abiCoder.encode(
-          ["uint256[]"],
-          [
-            [
-              ethers.utils.parseUnits("800", 18),
-              ethers.utils.parseUnits("100", 18),
-              ethers.utils.parseUnits("100", 18),
-            ],
-          ]
-        ),
+        abiCoder.encode(["uint256"], [ethers.utils.parseUnits("800", 18)]),
+        abiCoder.encode(["address"], [claimToken.address]),
         abiCoder.encode(["bytes32"], [ethers.utils.formatBytes32String("hi")]),
+        abiCoder.encode(
+          ["bytes32"],
+          [root]
+        ),
       ];
 
       const result = await tokenFactory.callStatic.create(
@@ -57,7 +78,7 @@ describe("Token Factory", function () {
       );
       tx = await tokenFactory.create(deployer.address, data);
       // eslint-disable-next-line camelcase
-      token = VotesTokenWithSupply__factory.connect(result[0], deployer);
+      token = VotesToken__factory.connect(result[0], deployer);
     });
 
     it("Token/Factory Deployed", async () => {
@@ -88,18 +109,14 @@ describe("Token Factory", function () {
           ["bytes", "bytes"],
           [
             // eslint-disable-next-line camelcase
-            VotesTokenWithSupply__factory.bytecode,
+            VotesToken__factory.bytecode,
             abiCoder.encode(
-              ["string", "string", "address[]", "uint256[]"],
+              ["string", "string", "uint256", "address"],
               [
                 "DECENT",
                 "DCNT",
-                [dao.address, userA.address, userB.address],
-                [
-                  ethers.utils.parseUnits("800", 18),
-                  ethers.utils.parseUnits("100", 18),
-                  ethers.utils.parseUnits("100", 18),
-                ],
+                ethers.utils.parseUnits("800", 18),
+                claimToken.address,
               ]
             ),
           ]
@@ -113,45 +130,46 @@ describe("Token Factory", function () {
     it("Init is correct", async () => {
       expect(await token.name()).to.eq("DECENT");
       expect(await token.symbol()).to.eq("DCNT");
-    });
-
-    it("Balances are correct", async () => {
-      expect(await token.balanceOf(userA.address)).to.eq(
-        ethers.utils.parseUnits("100", 18)
-      );
-      expect(await token.balanceOf(userB.address)).to.eq(
-        ethers.utils.parseUnits("100", 18)
-      );
-      expect(await token.balanceOf(dao.address)).to.eq(
+      expect(await token.totalSupply()).to.eq(
         ethers.utils.parseUnits("800", 18)
       );
+      expect(await token.balanceOf(claimToken.address)).to.eq(
+        await token.totalSupply()
+      );
+      expect(await claimToken.merkles(token.address)).to.eq(
+        root
+      );
     });
 
-    it("Token Factory does not deploy with incorrect data", async () => {
-      const abiCoder = new ethers.utils.AbiCoder();
-      const data = [
-        abiCoder.encode(["address"], [userA.address]),
-        abiCoder.encode(["string"], ["DCNT"]),
-        abiCoder.encode(
-          ["address[]"],
-          [[dao.address, userA.address, userB.address]]
-        ),
-        abiCoder.encode(
-          ["uint256[]"],
-          [
-            [
-              ethers.utils.parseUnits("800", 18),
-              ethers.utils.parseUnits("100", 18),
-              ethers.utils.parseUnits("100", 18),
-            ],
-          ]
-        ),
-      ];
-
-      // const result = await tokenFactory.callStatic.create(data);
-      await expect(tokenFactory.callStatic.create(deployer.address, data)).to.be
-        .reverted;
+    it("Can claim merkle amount", async () => {
+      proof = merkleTree.getHexProof(leaves[0]);
+      await expect(claimToken.claimMerkle(token.address, deployer.address, ethers.utils.parseUnits("100", 18), proof)).to.emit(claimToken, "MerkleClaimed");
+      expect(await token.balanceOf(deployer.address)).to.eq(ethers.utils.parseUnits("100", 18));
+      expect(await token.balanceOf(claimToken.address)).to.eq(ethers.utils.parseUnits("700", 18));
     });
+
+    it("Can claim onBehalf", async () => {
+      proof = merkleTree.getHexProof(leaves[1]);
+      await expect(claimToken.connect(userB).claimMerkle(token.address, userA.address, ethers.utils.parseUnits("150", 18), proof)).to.emit(claimToken, "MerkleClaimed");
+      expect(await token.balanceOf(userA.address)).to.eq(ethers.utils.parseUnits("150", 18));
+      expect(await token.balanceOf(userB.address)).to.eq(0);
+      expect(await token.balanceOf(claimToken.address)).to.eq(ethers.utils.parseUnits("650", 18));
+    });
+
+    it("Should Revert", async () => {
+      proof = merkleTree.getHexProof(leaves[1]);
+      // if a user tries to send someone elses claim to themselves
+      await expect(claimToken.connect(userB).claimMerkle(token.address, userB.address, ethers.utils.parseUnits("150", 18), proof)).to.revertedWith("MerkleDistributor: Invalid proof.");
+      // if a user tries to send more/less tokens to themselves
+      await expect(claimToken.connect(userA).claimMerkle(token.address, userA.address, ethers.utils.parseUnits("200", 18), proof)).to.revertedWith("MerkleDistributor: Invalid proof.");
+      await expect(claimToken.connect(userA).claimMerkle(token.address, userA.address, ethers.utils.parseUnits("100", 18), proof)).to.revertedWith("MerkleDistributor: Invalid proof.");
+      // double claim
+      await expect(claimToken.connect(userB).claimMerkle(token.address, userA.address, ethers.utils.parseUnits("150", 18), proof)).to.emit(claimToken, "MerkleClaimed");
+      await expect(claimToken.connect(userA).claimMerkle(token.address, userA.address, ethers.utils.parseUnits("150", 18), proof)).to.revertedWith("This allocation has been claimed");
+    });
+
+    // todo: merkle tree
+    // todo: snapshot
 
     it("Supports the expected ERC165 interface", async () => {
       expect(
