@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 import "./TokenFactory.sol";
 
 // todo: add vesting ability
-//todo: add ability to add additional holders
+//todo: remove liquidity if not claimed
 contract ClaimToken {
     using SafeERC20 for IERC20;
 
@@ -22,6 +22,8 @@ contract ClaimToken {
     mapping(address => mapping(address => ChildTokenInfo)) public cTokens; // pToken => cToken => snapId
     mapping(address => address) public findMyDaddy;
     mapping(address => MerkleInfo) public merkles;
+
+    event MerkleClaimed(address indexed token, address indexed claimer, uint256 amount);
 
     ///////////////// Merkle And Swap //////////////////////////
 
@@ -56,9 +58,10 @@ contract ClaimToken {
             !merkles[token].isMerkleClaimed[claimer],
             "This allocation has been claimed"
         );
-        merkles[token].isMerkleClaimed[claimer] == true;
+        merkles[token].isMerkleClaimed[claimer] = true;
         merkleVerify(token, claimer, amount, merkleProof);
         IERC20(token).safeTransfer(claimer, amount);
+        emit MerkleClaimed(token, claimer, amount);
     }
 
     ////////////////////////// SnapShot //////////////////////////////////
@@ -68,7 +71,7 @@ contract ClaimToken {
         uint256 pAllocation
     ) external returns (uint256 snapId) {
         require(
-            cTokens[pToken][cToken].snapId == 0,
+            cTokens[pToken][cToken].snapId != 0,
             "This token has already been initilized with a snapId"
         );
         snapId = VotesToken(pToken).captureSnapShot();
