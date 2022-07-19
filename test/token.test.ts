@@ -38,6 +38,39 @@ describe("Token Factory", function () {
     claim: BigNumber;
   }[];
 
+  async function createWSnap() {
+    airdropClaimants = [
+      { addr: userB.address, claim: ethers.utils.parseUnits("100", 18) },
+    ];
+
+    // Prepare merkle tree of claimants
+    leaves = makeLeaves(airdropClaimants);
+    merkleTree = constructMerkleTree(leaves);
+
+    // Create tree
+    root = merkleTree.getHexRoot();
+
+    const abiCoder = new ethers.utils.AbiCoder();
+    const data = [
+      abiCoder.encode(["string"], ["Token2"]),
+      abiCoder.encode(["string"], ["TWO"]),
+      abiCoder.encode(["uint256"], [ethers.utils.parseUnits("800", 18)]),
+      abiCoder.encode(["address"], [claimToken.address]),
+      abiCoder.encode(["bytes32"], [ethers.utils.formatBytes32String("hi")]),
+      abiCoder.encode(["bytes32"], [root]),
+      abiCoder.encode(["address"], [token.address]),
+      abiCoder.encode(["uint256"], [ethers.utils.parseUnits("700", 18)]),
+    ];
+
+    const result = await tokenFactory.callStatic.createWSnap(
+      deployer.address,
+      data
+    );
+    tx = await tokenFactory.createWSnap(deployer.address, data);
+    // eslint-disable-next-line camelcase
+    return VotesToken__factory.connect(result[0], deployer);
+  }
+
   describe("Token / Factory", function () {
     beforeEach(async function () {
       [deployer, dao, userA, userB] = await ethers.getSigners();
@@ -228,6 +261,183 @@ describe("Token Factory", function () {
             proof
           )
       ).to.revertedWith("This allocation has been claimed");
+    });
+
+    it("Creates WSnap - can claim merkle", async () => {
+      const proof0 = merkleTree.getHexProof(leaves[0]);
+      const proof1 = merkleTree.getHexProof(leaves[1]);
+      await expect(
+        claimToken.claimMerkle(
+          token.address,
+          deployer.address,
+          ethers.utils.parseUnits("100", 18),
+          proof0
+        )
+      ).to.emit(claimToken, "MerkleClaimed");
+      await expect(
+        claimToken.claimMerkle(
+          token.address,
+          userA.address,
+          ethers.utils.parseUnits("150", 18),
+          proof1
+        )
+      ).to.emit(claimToken, "MerkleClaimed");
+      const token2 = await createWSnap();
+
+      proof = merkleTree.getHexProof(leaves[0]);
+      await expect(
+        claimToken
+          .connect(userB)
+          .claimMerkle(
+            token2.address,
+            userB.address,
+            ethers.utils.parseUnits("100", 18),
+            proof
+          )
+      ).to.emit(claimToken, "MerkleClaimed");
+      expect(await token2.balanceOf(userB.address)).to.eq(
+        ethers.utils.parseUnits("100", 18)
+      );
+      expect(await token2.balanceOf(claimToken.address)).to.eq(
+        ethers.utils.parseUnits("700", 18)
+      );
+    });
+
+    it("Creates WSnap - Snap Initialized", async () => {
+      const proof0 = merkleTree.getHexProof(leaves[0]);
+      const proof1 = merkleTree.getHexProof(leaves[1]);
+      await expect(
+        claimToken.claimMerkle(
+          token.address,
+          deployer.address,
+          ethers.utils.parseUnits("100", 18),
+          proof0
+        )
+      ).to.emit(claimToken, "MerkleClaimed");
+      await expect(
+        claimToken.claimMerkle(
+          token.address,
+          userA.address,
+          ethers.utils.parseUnits("150", 18),
+          proof1
+        )
+      ).to.emit(claimToken, "MerkleClaimed");
+      const token2 = await createWSnap();
+      expect(
+        await (
+          await claimToken.cTokens(token.address, token2.address)
+        ).snapId
+      ).to.eq(1);
+      expect(
+        await (
+          await claimToken.cTokens(token.address, token2.address)
+        ).pAllocation
+      ).to.eq(ethers.utils.parseUnits("700", 18));
+    });
+
+    it("Creates WSnap - claim Snap", async () => {
+      const proof0 = merkleTree.getHexProof(leaves[0]);
+      const proof1 = merkleTree.getHexProof(leaves[1]);
+      await expect(
+        claimToken.claimMerkle(
+          token.address,
+          deployer.address,
+          ethers.utils.parseUnits("100", 18),
+          proof0
+        )
+      ).to.emit(claimToken, "MerkleClaimed");
+      await expect(
+        claimToken.claimMerkle(
+          token.address,
+          userA.address,
+          ethers.utils.parseUnits("150", 18),
+          proof1
+        )
+      ).to.emit(claimToken, "MerkleClaimed");
+      const token2 = await createWSnap();
+      const amount = await claimToken.calculateClaimAmount(
+        token.address,
+        token2.address,
+        deployer.address
+      );
+      // Claim on behalf
+      await expect(
+        claimToken.connect(userB).claimSnap(token2.address, deployer.address)
+      ).to.emit(claimToken, "SnapClaimed");
+      expect(
+        await amount
+          .add(
+            await await claimToken.calculateClaimAmount(
+              token.address,
+              token2.address,
+              userA.address
+            )
+          )
+          .add(
+            await await claimToken.calculateClaimAmount(
+              token.address,
+              token2.address,
+              claimToken.address
+            )
+          )
+      ).to.eq(ethers.utils.parseUnits("700", 18));
+      expect(await token2.balanceOf(deployer.address)).to.eq(amount);
+      expect(await token2.balanceOf(claimToken.address)).to.eq(
+        ethers.utils.parseUnits("800", 18).sub(amount)
+      );
+    });
+
+    it("Should revert double claim", async () => {
+      const proof0 = merkleTree.getHexProof(leaves[0]);
+      const proof1 = merkleTree.getHexProof(leaves[1]);
+      await expect(
+        claimToken.claimMerkle(
+          token.address,
+          deployer.address,
+          ethers.utils.parseUnits("100", 18),
+          proof0
+        )
+      ).to.emit(claimToken, "MerkleClaimed");
+      await expect(
+        claimToken.claimMerkle(
+          token.address,
+          userA.address,
+          ethers.utils.parseUnits("150", 18),
+          proof1
+        )
+      ).to.emit(claimToken, "MerkleClaimed");
+      const token2 = await createWSnap();
+      await expect(
+        claimToken.claimSnap(token2.address, deployer.address)
+      ).to.emit(claimToken, "SnapClaimed");
+      await expect(
+        claimToken.claimSnap(token2.address, deployer.address)
+      ).to.revertedWith("This allocation has been claimed");
+    });
+
+    it("Should revert without an allocation", async () => {
+      const proof0 = merkleTree.getHexProof(leaves[0]);
+      const proof1 = merkleTree.getHexProof(leaves[1]);
+      await expect(
+        claimToken.claimMerkle(
+          token.address,
+          deployer.address,
+          ethers.utils.parseUnits("100", 18),
+          proof0
+        )
+      ).to.emit(claimToken, "MerkleClaimed");
+      await expect(
+        claimToken.claimMerkle(
+          token.address,
+          userA.address,
+          ethers.utils.parseUnits("150", 18),
+          proof1
+        )
+      ).to.emit(claimToken, "MerkleClaimed");
+      const token2 = await createWSnap();
+      await expect(
+        claimToken.claimSnap(token2.address, userB.address)
+      ).to.revertedWith("The claimer does not have an allocation");
     });
 
     // todo: merkle tree
