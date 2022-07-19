@@ -40,7 +40,8 @@ describe("Token Factory", function () {
 
   async function createWSnap() {
     airdropClaimants = [
-      { addr: userB.address, claim: ethers.utils.parseUnits("100", 18) },
+      { addr: userA.address, claim: ethers.utils.parseUnits("50", 18) },
+      { addr: userB.address, claim: ethers.utils.parseUnits("50", 18) },
     ];
 
     // Prepare merkle tree of claimants
@@ -440,8 +441,42 @@ describe("Token Factory", function () {
       ).to.revertedWith("The claimer does not have an allocation");
     });
 
-    // todo: merkle tree
-    // todo: snapshot
+    it("Should bulk claim", async () => {
+      const proof0 = merkleTree.getHexProof(leaves[0]);
+      const proof1 = merkleTree.getHexProof(leaves[1]);
+      await expect(
+        claimToken.claimMerkle(
+          token.address,
+          deployer.address,
+          ethers.utils.parseUnits("100", 18),
+          proof0
+        )
+      ).to.emit(claimToken, "MerkleClaimed");
+      await expect(
+        claimToken.claimMerkle(
+          token.address,
+          userA.address,
+          ethers.utils.parseUnits("150", 18),
+          proof1
+        )
+      ).to.emit(claimToken, "MerkleClaimed");
+      const token2 = await createWSnap();
+      proof = merkleTree.getHexProof(leaves[0]);
+      await claimToken.batchClaimMerkleAndSnap(
+        [token2.address],
+        [userA.address],
+        [ethers.utils.parseUnits("50", 18)],
+        [proof]
+      );
+      const amount = await (
+        await claimToken.calculateClaimAmount(
+          token.address,
+          token2.address,
+          userA.address
+        )
+      ).add(ethers.utils.parseUnits("50", 18));
+      expect(await token2.balanceOf(userA.address)).to.eq(amount);
+    });
 
     it("Supports the expected ERC165 interface", async () => {
       expect(
