@@ -23,7 +23,6 @@ describe("Token Factory", function () {
 
   // eslint-disable-next-line camelcase
   let deployer: SignerWithAddress;
-  let dao: SignerWithAddress;
   let userA: SignerWithAddress;
   let userB: SignerWithAddress;
 
@@ -35,23 +34,27 @@ describe("Token Factory", function () {
       abiCoder.encode(["address[]"], [[claimToken.address]]),
       abiCoder.encode(["uint256[]"], [[ethers.utils.parseUnits("800", 18)]]),
       abiCoder.encode(["bytes32"], [ethers.utils.formatBytes32String("hi")]),
-      abiCoder.encode(["address"], [claimToken.address]),
-      abiCoder.encode(["address"], [token.address]),
-      abiCoder.encode(["uint256"], [ethers.utils.parseUnits("800", 18)]),
     ];
-
-    const result = await tokenFactory.callStatic.createWSnap(
-      deployer.address,
-      data
+    const result = await claimToken.callStatic.createSubsidiary(
+      tokenFactory.address,
+      data,
+      token.address,
+      ethers.utils.parseUnits("800", 18)
     );
-    tx = await tokenFactory.createWSnap(deployer.address, data);
+
+    tx = await claimToken.createSubsidiary(
+      tokenFactory.address,
+      data,
+      token.address,
+      ethers.utils.parseUnits("800", 18)
+    );
     // eslint-disable-next-line camelcase
-    return VotesToken__factory.connect(result[0], deployer);
+    return VotesToken__factory.connect(result, deployer);
   }
 
   describe("Token / Factory", function () {
     beforeEach(async function () {
-      [deployer, dao, userA, userB] = await ethers.getSigners();
+      [deployer, userA, userB] = await ethers.getSigners();
 
       tokenFactory = await new TokenFactory__factory(deployer).deploy();
       claimToken = await new ClaimSubsidiary__factory(deployer).deploy();
