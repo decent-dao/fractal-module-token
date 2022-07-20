@@ -37,39 +37,6 @@ contract TokenFactory is ITokenFactory, ERC165 {
         return createdContracts;
     }
 
-    function createWSnap(address creator, bytes[] calldata data)
-        external
-        returns (address[] memory)
-    {
-        address[] memory createdContracts = new address[](1);
-
-        string memory name = abi.decode(data[0], (string));
-        string memory symbol = abi.decode(data[1], (string));
-        address[] memory hodlers = abi.decode(data[2], (address[]));
-        uint256[] memory allocations = abi.decode(data[3], (uint256[]));
-        bytes32 salt = abi.decode(data[4], (bytes32));
-        address claimContract = abi.decode(data[5], (address));
-        // create Snapshot
-        address pToken = abi.decode(data[6], (address));
-        uint256 pAllocation = abi.decode(data[7], (uint256));
-
-        createdContracts[0] = _createToken(
-            creator,
-            salt,
-            name,
-            symbol,
-            hodlers,
-            allocations
-        );
-        ClaimSubsidiary(claimContract).addSnap(
-            pToken,
-            createdContracts[0],
-            pAllocation
-        );
-
-        return createdContracts;
-    }
-
     function _createToken(
         address creator,
         bytes32 salt,
