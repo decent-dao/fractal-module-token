@@ -25,16 +25,18 @@ contract ClaimSubsidiary {
     );
 
     ////////////////////////// SnapShot //////////////////////////////////
-    function addSnap(
+    function createSubsidiary(
+        address tokenFactory,
+        bytes[] calldata createTokenData,
         address pToken,
-        address cToken,
         uint256 pAllocation
-    ) external returns (uint256 snapId) {
+    ) external returns (address cToken) {
+        cToken = TokenFactory(tokenFactory).create(msg.sender, createTokenData)[0];
         require(
             cTokens[pToken][cToken].snapId == 0,
             "This token has already been initilized with a snapId"
         );
-        snapId = VotesToken(pToken).captureSnapShot();
+        uint snapId = VotesToken(pToken).captureSnapShot();
         cTokens[pToken][cToken].snapId = snapId;
         cTokens[pToken][cToken].pAllocation = pAllocation;
         findMyDaddy[cToken] = pToken;
