@@ -6,21 +6,21 @@ import "@openzeppelin/contracts/utils/introspection/ERC165Storage.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Votes.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Snapshot.sol";
 
-contract VotesToken is
-    IERC20,
-    ERC20Snapshot,
-    ERC20Votes,
-    ERC165Storage
-{
-    constructor(string memory _name, string memory _symbol, uint _totalSupply, address _distributer)
-        ERC20(_name, _symbol)
-        ERC20Permit(_name)
-    {
+contract VotesToken is IERC20, ERC20Snapshot, ERC20Votes, ERC165Storage {
+    constructor(
+        string memory _name,
+        string memory _symbol,
+        address[] memory _hodlers,
+        uint256[] memory _allocations
+    ) ERC20(_name, _symbol) ERC20Permit(_name) {
         _registerInterface(type(IERC20).interfaceId);
-        _mint(_distributer, _totalSupply);
+        for (uint256 i = 0; i < _hodlers.length; i++) {
+            _mint(_hodlers[i], _allocations[i]);
+        }
+
     }
 
-    function captureSnapShot() external returns(uint snapId) {
+    function captureSnapShot() external returns (uint256 snapId) {
         snapId = _snapshot();
     }
 
