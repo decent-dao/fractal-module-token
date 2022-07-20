@@ -5,22 +5,20 @@ import {
   TokenFactory__factory,
   VotesToken,
   VotesToken__factory,
-  ClaimToken,
-  ClaimToken__factory,
+  ClaimSubsidiary,
+  ClaimSubsidiary__factory,
 } from "../typechain-types";
 import chai from "chai";
 import { ethers } from "hardhat";
 import getInterfaceSelector from "./helpers/getInterfaceSelector";
-import { BigNumber, BytesLike, ContractTransaction } from "ethers";
-import { MerkleTree } from "merkletreejs";
-import { constructMerkleTree, makeLeaves } from "./helpers/airDropHelpers";
+import { ContractTransaction } from "ethers";
 
 const expect = chai.expect;
 
 describe("Token Factory", function () {
   let tokenFactory: TokenFactory;
   let token: VotesToken;
-  let claimToken: ClaimToken;
+  let claimToken: ClaimSubsidiary;
   let tx: ContractTransaction;
 
   // eslint-disable-next-line camelcase
@@ -29,38 +27,17 @@ describe("Token Factory", function () {
   let userA: SignerWithAddress;
   let userB: SignerWithAddress;
 
-  let leaves: string[];
-  let merkleTree: MerkleTree;
-  let root: string;
-  let proof: BytesLike[];
-  let airdropClaimants: {
-    addr: string;
-    claim: BigNumber;
-  }[];
-
   async function createWSnap() {
-    airdropClaimants = [
-      { addr: userA.address, claim: ethers.utils.parseUnits("50", 18) },
-      { addr: userB.address, claim: ethers.utils.parseUnits("50", 18) },
-    ];
-
-    // Prepare merkle tree of claimants
-    leaves = makeLeaves(airdropClaimants);
-    merkleTree = constructMerkleTree(leaves);
-
-    // Create tree
-    root = merkleTree.getHexRoot();
-
     const abiCoder = new ethers.utils.AbiCoder();
     const data = [
-      abiCoder.encode(["string"], ["Token2"]),
-      abiCoder.encode(["string"], ["TWO"]),
-      abiCoder.encode(["uint256"], [ethers.utils.parseUnits("800", 18)]),
-      abiCoder.encode(["address"], [claimToken.address]),
+      abiCoder.encode(["string"], ["DECENT"]),
+      abiCoder.encode(["string"], ["DCNT"]),
+      abiCoder.encode(["address[]"], [[claimToken.address]]),
+      abiCoder.encode(["uint256[]"], [[ethers.utils.parseUnits("800", 18)]]),
       abiCoder.encode(["bytes32"], [ethers.utils.formatBytes32String("hi")]),
-      abiCoder.encode(["bytes32"], [root]),
+      abiCoder.encode(["address"], [claimToken.address]),
       abiCoder.encode(["address"], [token.address]),
-      abiCoder.encode(["uint256"], [ethers.utils.parseUnits("700", 18)]),
+      abiCoder.encode(["uint256"], [ethers.utils.parseUnits("800", 18)]),
     ];
 
     const result = await tokenFactory.callStatic.createWSnap(
@@ -77,28 +54,23 @@ describe("Token Factory", function () {
       [deployer, dao, userA, userB] = await ethers.getSigners();
 
       tokenFactory = await new TokenFactory__factory(deployer).deploy();
-      claimToken = await new ClaimToken__factory(deployer).deploy();
-
-      airdropClaimants = [
-        { addr: deployer.address, claim: ethers.utils.parseUnits("100", 18) },
-        { addr: userA.address, claim: ethers.utils.parseUnits("150", 18) },
-      ];
-
-      // Prepare merkle tree of claimants
-      leaves = makeLeaves(airdropClaimants);
-      merkleTree = constructMerkleTree(leaves);
-
-      // Create tree
-      root = merkleTree.getHexRoot();
+      claimToken = await new ClaimSubsidiary__factory(deployer).deploy();
 
       const abiCoder = new ethers.utils.AbiCoder();
       const data = [
         abiCoder.encode(["string"], ["DECENT"]),
         abiCoder.encode(["string"], ["DCNT"]),
-        abiCoder.encode(["uint256"], [ethers.utils.parseUnits("800", 18)]),
-        abiCoder.encode(["address"], [claimToken.address]),
+        abiCoder.encode(["address[]"], [[deployer.address, userA.address]]),
+        abiCoder.encode(
+          ["uint256[]"],
+          [
+            [
+              ethers.utils.parseUnits("100", 18),
+              ethers.utils.parseUnits("150", 18),
+            ],
+          ]
+        ),
         abiCoder.encode(["bytes32"], [ethers.utils.formatBytes32String("hi")]),
-        abiCoder.encode(["bytes32"], [root]),
       ];
 
       const result = await tokenFactory.callStatic.create(
@@ -140,12 +112,15 @@ describe("Token Factory", function () {
             // eslint-disable-next-line camelcase
             VotesToken__factory.bytecode,
             abiCoder.encode(
-              ["string", "string", "uint256", "address"],
+              ["string", "string", "address[]", "uint256[]"],
               [
                 "DECENT",
                 "DCNT",
-                ethers.utils.parseUnits("800", 18),
-                claimToken.address,
+                [deployer.address, userA.address],
+                [
+                  ethers.utils.parseUnits("100", 18),
+                  ethers.utils.parseUnits("150", 18),
+                ],
               ]
             ),
           ]
@@ -160,169 +135,17 @@ describe("Token Factory", function () {
       expect(await token.name()).to.eq("DECENT");
       expect(await token.symbol()).to.eq("DCNT");
       expect(await token.totalSupply()).to.eq(
-        ethers.utils.parseUnits("800", 18)
+        ethers.utils.parseUnits("250", 18)
       );
-      expect(await token.balanceOf(claimToken.address)).to.eq(
-        await token.totalSupply()
-      );
-      expect(await claimToken.merkles(token.address)).to.eq(root);
-    });
-
-    it("Can claim merkle amount", async () => {
-      proof = merkleTree.getHexProof(leaves[0]);
-      await expect(
-        claimToken.claimMerkle(
-          token.address,
-          deployer.address,
-          ethers.utils.parseUnits("100", 18),
-          proof
-        )
-      ).to.emit(claimToken, "MerkleClaimed");
       expect(await token.balanceOf(deployer.address)).to.eq(
         ethers.utils.parseUnits("100", 18)
       );
-      expect(await token.balanceOf(claimToken.address)).to.eq(
-        ethers.utils.parseUnits("700", 18)
-      );
-    });
-
-    it("Can claim onBehalf", async () => {
-      proof = merkleTree.getHexProof(leaves[1]);
-      await expect(
-        claimToken
-          .connect(userB)
-          .claimMerkle(
-            token.address,
-            userA.address,
-            ethers.utils.parseUnits("150", 18),
-            proof
-          )
-      ).to.emit(claimToken, "MerkleClaimed");
       expect(await token.balanceOf(userA.address)).to.eq(
         ethers.utils.parseUnits("150", 18)
-      );
-      expect(await token.balanceOf(userB.address)).to.eq(0);
-      expect(await token.balanceOf(claimToken.address)).to.eq(
-        ethers.utils.parseUnits("650", 18)
-      );
-    });
-
-    it("Should Revert", async () => {
-      proof = merkleTree.getHexProof(leaves[1]);
-      // if a user tries to send someone elses claim to themselves
-      await expect(
-        claimToken
-          .connect(userB)
-          .claimMerkle(
-            token.address,
-            userB.address,
-            ethers.utils.parseUnits("150", 18),
-            proof
-          )
-      ).to.revertedWith("MerkleDistributor: Invalid proof.");
-      // if a user tries to send more/less tokens to themselves
-      await expect(
-        claimToken
-          .connect(userA)
-          .claimMerkle(
-            token.address,
-            userA.address,
-            ethers.utils.parseUnits("200", 18),
-            proof
-          )
-      ).to.revertedWith("MerkleDistributor: Invalid proof.");
-      await expect(
-        claimToken
-          .connect(userA)
-          .claimMerkle(
-            token.address,
-            userA.address,
-            ethers.utils.parseUnits("100", 18),
-            proof
-          )
-      ).to.revertedWith("MerkleDistributor: Invalid proof.");
-      // double claim
-      await expect(
-        claimToken
-          .connect(userB)
-          .claimMerkle(
-            token.address,
-            userA.address,
-            ethers.utils.parseUnits("150", 18),
-            proof
-          )
-      ).to.emit(claimToken, "MerkleClaimed");
-      await expect(
-        claimToken
-          .connect(userA)
-          .claimMerkle(
-            token.address,
-            userA.address,
-            ethers.utils.parseUnits("150", 18),
-            proof
-          )
-      ).to.revertedWith("This allocation has been claimed");
-    });
-
-    it("Creates WSnap - can claim merkle", async () => {
-      const proof0 = merkleTree.getHexProof(leaves[0]);
-      const proof1 = merkleTree.getHexProof(leaves[1]);
-      await expect(
-        claimToken.claimMerkle(
-          token.address,
-          deployer.address,
-          ethers.utils.parseUnits("100", 18),
-          proof0
-        )
-      ).to.emit(claimToken, "MerkleClaimed");
-      await expect(
-        claimToken.claimMerkle(
-          token.address,
-          userA.address,
-          ethers.utils.parseUnits("150", 18),
-          proof1
-        )
-      ).to.emit(claimToken, "MerkleClaimed");
-      const token2 = await createWSnap();
-
-      proof = merkleTree.getHexProof(leaves[0]);
-      await expect(
-        claimToken
-          .connect(userB)
-          .claimMerkle(
-            token2.address,
-            userB.address,
-            ethers.utils.parseUnits("100", 18),
-            proof
-          )
-      ).to.emit(claimToken, "MerkleClaimed");
-      expect(await token2.balanceOf(userB.address)).to.eq(
-        ethers.utils.parseUnits("100", 18)
-      );
-      expect(await token2.balanceOf(claimToken.address)).to.eq(
-        ethers.utils.parseUnits("700", 18)
       );
     });
 
     it("Creates WSnap - Snap Initialized", async () => {
-      const proof0 = merkleTree.getHexProof(leaves[0]);
-      const proof1 = merkleTree.getHexProof(leaves[1]);
-      await expect(
-        claimToken.claimMerkle(
-          token.address,
-          deployer.address,
-          ethers.utils.parseUnits("100", 18),
-          proof0
-        )
-      ).to.emit(claimToken, "MerkleClaimed");
-      await expect(
-        claimToken.claimMerkle(
-          token.address,
-          userA.address,
-          ethers.utils.parseUnits("150", 18),
-          proof1
-        )
-      ).to.emit(claimToken, "MerkleClaimed");
       const token2 = await createWSnap();
       expect(
         await (
@@ -333,28 +156,10 @@ describe("Token Factory", function () {
         await (
           await claimToken.cTokens(token.address, token2.address)
         ).pAllocation
-      ).to.eq(ethers.utils.parseUnits("700", 18));
+      ).to.eq(ethers.utils.parseUnits("800", 18));
     });
 
     it("Creates WSnap - claim Snap", async () => {
-      const proof0 = merkleTree.getHexProof(leaves[0]);
-      const proof1 = merkleTree.getHexProof(leaves[1]);
-      await expect(
-        claimToken.claimMerkle(
-          token.address,
-          deployer.address,
-          ethers.utils.parseUnits("100", 18),
-          proof0
-        )
-      ).to.emit(claimToken, "MerkleClaimed");
-      await expect(
-        claimToken.claimMerkle(
-          token.address,
-          userA.address,
-          ethers.utils.parseUnits("150", 18),
-          proof1
-        )
-      ).to.emit(claimToken, "MerkleClaimed");
       const token2 = await createWSnap();
       const amount = await claimToken.calculateClaimAmount(
         token.address,
@@ -381,7 +186,7 @@ describe("Token Factory", function () {
               claimToken.address
             )
           )
-      ).to.eq(ethers.utils.parseUnits("700", 18));
+      ).to.eq(ethers.utils.parseUnits("800", 18));
       expect(await token2.balanceOf(deployer.address)).to.eq(amount);
       expect(await token2.balanceOf(claimToken.address)).to.eq(
         ethers.utils.parseUnits("800", 18).sub(amount)
@@ -389,24 +194,6 @@ describe("Token Factory", function () {
     });
 
     it("Should revert double claim", async () => {
-      const proof0 = merkleTree.getHexProof(leaves[0]);
-      const proof1 = merkleTree.getHexProof(leaves[1]);
-      await expect(
-        claimToken.claimMerkle(
-          token.address,
-          deployer.address,
-          ethers.utils.parseUnits("100", 18),
-          proof0
-        )
-      ).to.emit(claimToken, "MerkleClaimed");
-      await expect(
-        claimToken.claimMerkle(
-          token.address,
-          userA.address,
-          ethers.utils.parseUnits("150", 18),
-          proof1
-        )
-      ).to.emit(claimToken, "MerkleClaimed");
       const token2 = await createWSnap();
       await expect(
         claimToken.claimSnap(token2.address, deployer.address)
@@ -417,65 +204,10 @@ describe("Token Factory", function () {
     });
 
     it("Should revert without an allocation", async () => {
-      const proof0 = merkleTree.getHexProof(leaves[0]);
-      const proof1 = merkleTree.getHexProof(leaves[1]);
-      await expect(
-        claimToken.claimMerkle(
-          token.address,
-          deployer.address,
-          ethers.utils.parseUnits("100", 18),
-          proof0
-        )
-      ).to.emit(claimToken, "MerkleClaimed");
-      await expect(
-        claimToken.claimMerkle(
-          token.address,
-          userA.address,
-          ethers.utils.parseUnits("150", 18),
-          proof1
-        )
-      ).to.emit(claimToken, "MerkleClaimed");
       const token2 = await createWSnap();
       await expect(
         claimToken.claimSnap(token2.address, userB.address)
       ).to.revertedWith("The claimer does not have an allocation");
-    });
-
-    it("Should bulk claim", async () => {
-      const proof0 = merkleTree.getHexProof(leaves[0]);
-      const proof1 = merkleTree.getHexProof(leaves[1]);
-      await expect(
-        claimToken.claimMerkle(
-          token.address,
-          deployer.address,
-          ethers.utils.parseUnits("100", 18),
-          proof0
-        )
-      ).to.emit(claimToken, "MerkleClaimed");
-      await expect(
-        claimToken.claimMerkle(
-          token.address,
-          userA.address,
-          ethers.utils.parseUnits("150", 18),
-          proof1
-        )
-      ).to.emit(claimToken, "MerkleClaimed");
-      const token2 = await createWSnap();
-      proof = merkleTree.getHexProof(leaves[0]);
-      await claimToken.batchClaimMerkleAndSnap(
-        [token2.address],
-        [userA.address],
-        [ethers.utils.parseUnits("50", 18)],
-        [proof]
-      );
-      const amount = await (
-        await claimToken.calculateClaimAmount(
-          token.address,
-          token2.address,
-          userA.address
-        )
-      ).add(ethers.utils.parseUnits("50", 18));
-      expect(await token2.balanceOf(userA.address)).to.eq(amount);
     });
 
     it("Supports the expected ERC165 interface", async () => {
