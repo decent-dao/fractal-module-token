@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 import "./interfaces/ITokenFactory.sol";
 import "./VotesToken.sol";
-import "./ClaimToken.sol";
+import "./ClaimSubsidiary.sol";
 import "@openzeppelin/contracts/utils/Create2.sol";
 
 /// @notice Token Factory used to deploy votes tokens
@@ -21,19 +21,17 @@ contract TokenFactory is ITokenFactory, ERC165 {
 
         string memory name = abi.decode(data[0], (string));
         string memory symbol = abi.decode(data[1], (string));
-        uint256 totalSupply = abi.decode(data[2], (uint256));
-        address claimContract = abi.decode(data[3], (address));
+        address[] memory hodlers = abi.decode(data[2], (address[]));
+        uint256[] memory allocations = abi.decode(data[3], (uint256[]));
         bytes32 salt = abi.decode(data[4], (bytes32));
-        bytes32 merkleRoot = abi.decode(data[5], (bytes32));
 
         createdContracts[0] = _createToken(
             creator,
-            claimContract,
             salt,
-            merkleRoot,
             name,
             symbol,
-            totalSupply
+            hodlers,
+            allocations
         );
 
         return createdContracts;
@@ -47,25 +45,23 @@ contract TokenFactory is ITokenFactory, ERC165 {
 
         string memory name = abi.decode(data[0], (string));
         string memory symbol = abi.decode(data[1], (string));
-        uint256 totalSupply = abi.decode(data[2], (uint256));
-        address claimContract = abi.decode(data[3], (address));
+        address[] memory hodlers = abi.decode(data[2], (address[]));
+        uint256[] memory allocations = abi.decode(data[3], (uint256[]));
         bytes32 salt = abi.decode(data[4], (bytes32));
-        bytes32 merkleRoot = abi.decode(data[5], (bytes32));
-
+        address claimContract = abi.decode(data[5], (address));
         // create Snapshot
         address pToken = abi.decode(data[6], (address));
         uint256 pAllocation = abi.decode(data[7], (uint256));
 
         createdContracts[0] = _createToken(
             creator,
-            claimContract,
             salt,
-            merkleRoot,
             name,
             symbol,
-            totalSupply
+            hodlers,
+            allocations
         );
-        ClaimToken(claimContract).addSnap(
+        ClaimSubsidiary(claimContract).addSnap(
             pToken,
             createdContracts[0],
             pAllocation
@@ -76,12 +72,11 @@ contract TokenFactory is ITokenFactory, ERC165 {
 
     function _createToken(
         address creator,
-        address claimContract,
         bytes32 salt,
-        bytes32 merkleRoot,
         string memory name,
         string memory symbol,
-        uint256 totalSupply
+        address[] memory _hodlers,
+        uint256[] memory _allocations
     ) internal returns (address createdToken) {
         createdToken = Create2.deploy(
             0,
@@ -90,10 +85,9 @@ contract TokenFactory is ITokenFactory, ERC165 {
             ),
             abi.encodePacked(
                 type(VotesToken).creationCode,
-                abi.encode(name, symbol, totalSupply, claimContract)
+                abi.encode(name, symbol, _hodlers, _allocations)
             )
         );
-        ClaimToken(claimContract).addMerkle(createdToken, merkleRoot);
         emit TokenCreated(createdToken);
         return createdToken;
     }
