@@ -21,10 +21,8 @@ contract VotesTokenWithSupply is VotesToken {
         address[] memory hodlers,
         uint256[] memory allocations
     ) VotesToken(name, symbol) {
-        uint256 tokenSum;
         for (uint256 i = 0; i < hodlers.length; i++) {
             _mint(hodlers[i], allocations[i]);
-            tokenSum += allocations[i];
         }
     }
 }
