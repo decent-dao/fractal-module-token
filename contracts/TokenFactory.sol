@@ -3,18 +3,22 @@ pragma solidity ^0.8.0;
 
 import "./interfaces/ITokenFactory.sol";
 import "./VotesToken.sol";
-import "./ClaimSubsidiary.sol";
 import "@openzeppelin/contracts/utils/Create2.sol";
+import "@fractal-framework/core-contracts/contracts/ModuleFactoryBase.sol";
 
 /// @notice Token Factory used to deploy votes tokens
-contract TokenFactory is ITokenFactory, ERC165 {
+contract TokenFactory is ModuleFactoryBase, ITokenFactory {
+    function initialize() external initializer {
+        __initFactoryBase();
+    }
+
     /// @dev Creates an ERC-20 votes token
     /// @param creator The address creating the module
     /// @param data The array of bytes used to create the token
     /// @return address The address of the created token
     function create(address creator, bytes[] calldata data)
         external
-        override
+        override(ModuleFactoryBase, ITokenFactory)
         returns (address[] memory)
     {
         address[] memory createdContracts = new address[](1);
@@ -57,20 +61,5 @@ contract TokenFactory is ITokenFactory, ERC165 {
         );
         emit TokenCreated(createdToken);
         return createdToken;
-    }
-
-    /// @notice Returns whether a given interface ID is supported
-    /// @param interfaceId An interface ID bytes4 as defined by ERC-165
-    /// @return bool Indicates whether the interface is supported
-    function supportsInterface(bytes4 interfaceId)
-        public
-        view
-        virtual
-        override(ERC165)
-        returns (bool)
-    {
-        return
-            interfaceId == type(ITokenFactory).interfaceId ||
-            super.supportsInterface(interfaceId);
     }
 }
