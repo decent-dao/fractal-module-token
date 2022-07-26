@@ -1,12 +1,19 @@
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import {
-  ITokenFactory__factory,
   TokenFactory,
   TokenFactory__factory,
   VotesToken,
   VotesToken__factory,
   ClaimSubsidiary,
   ClaimSubsidiary__factory,
+  ClaimFactory__factory,
+  ClaimFactory,
+  DAOAccessControl,
+  DAOAccessControl__factory,
+  ERC1967Proxy__factory,
+  IModuleFactoryBase__factory,
+  IERC165__factory,
+  IModuleBase__factory,
 } from "../typechain-types";
 import chai from "chai";
 import { ethers } from "hardhat";
@@ -16,53 +23,86 @@ import { ContractTransaction } from "ethers";
 const expect = chai.expect;
 
 describe("Token Factory", function () {
+  let accessControl: DAOAccessControl;
+
   let tokenFactory: TokenFactory;
-  let token: VotesToken;
-  let claimToken: ClaimSubsidiary;
+  let pToken: VotesToken;
+  let cToken: VotesToken;
+
+  let claimFactory: ClaimFactory;
+  let claimSubsidiary: ClaimSubsidiary;
+  let claimSubImpl: ClaimSubsidiary;
+  let predictedClaimSub: string;
+
   let tx: ContractTransaction;
 
   // eslint-disable-next-line camelcase
   let deployer: SignerWithAddress;
   let userA: SignerWithAddress;
   let userB: SignerWithAddress;
+  let upgrader: SignerWithAddress;
 
-  async function createWSnap() {
+  async function createClaim() {
     const abiCoder = new ethers.utils.AbiCoder();
-    const data = [
-      abiCoder.encode(["string"], ["DECENT"]),
-      abiCoder.encode(["string"], ["DCNT"]),
-      abiCoder.encode(["address[]"], [[claimToken.address]]),
-      abiCoder.encode(["uint256[]"], [[ethers.utils.parseUnits("800", 18)]]),
+    const claimData = [
+      abiCoder.encode(["address"], [accessControl.address]),
+      abiCoder.encode(["address"], [claimSubImpl.address]),
+      abiCoder.encode(["address"], [pToken.address]), // pToken
+      abiCoder.encode(["address"], [cToken.address]),
+      abiCoder.encode(["uint256"], [ethers.utils.parseUnits("100", 18)]),
       abiCoder.encode(["bytes32"], [ethers.utils.formatBytes32String("hi")]),
     ];
-    const result = await claimToken.callStatic.createSubsidiary(
-      tokenFactory.address,
-      data,
-      token.address,
-      ethers.utils.parseUnits("800", 18)
+    const claimResult = await claimFactory.callStatic.create(
+      deployer.address,
+      claimData
     );
 
-    tx = await claimToken.createSubsidiary(
-      tokenFactory.address,
-      data,
-      token.address,
-      ethers.utils.parseUnits("800", 18)
-    );
+    tx = await claimFactory.create(deployer.address, claimData);
     // eslint-disable-next-line camelcase
-    return VotesToken__factory.connect(result, deployer);
+    claimSubsidiary = ClaimSubsidiary__factory.connect(
+      claimResult[0],
+      deployer
+    );
   }
 
   describe("Token / Factory", function () {
     beforeEach(async function () {
-      [deployer, userA, userB] = await ethers.getSigners();
+      [deployer, userA, userB, upgrader] = await ethers.getSigners();
 
       tokenFactory = await new TokenFactory__factory(deployer).deploy();
-      claimToken = await new ClaimSubsidiary__factory(deployer).deploy();
+      claimFactory = await new ClaimFactory__factory(deployer).deploy();
+      claimSubImpl = await new ClaimSubsidiary__factory(deployer).deploy();
+      accessControl = await new DAOAccessControl__factory(deployer).deploy();
 
+      await tokenFactory.initialize();
+      await claimFactory.initialize();
+
+      const { chainId } = await ethers.provider.getNetwork();
       const abiCoder = new ethers.utils.AbiCoder();
-      const data = [
-        abiCoder.encode(["string"], ["DECENT"]),
-        abiCoder.encode(["string"], ["DCNT"]),
+      predictedClaimSub = ethers.utils.getCreate2Address(
+        claimFactory.address,
+        ethers.utils.solidityKeccak256(
+          ["address", "address", "uint256", "bytes32"],
+          [
+            deployer.address,
+            deployer.address,
+            chainId,
+            ethers.utils.formatBytes32String("hi"),
+          ]
+        ),
+        ethers.utils.solidityKeccak256(
+          ["bytes", "bytes"],
+          [
+            // eslint-disable-next-line camelcase
+            ERC1967Proxy__factory.bytecode,
+            abiCoder.encode(["address", "bytes"], [claimSubImpl.address, []]),
+          ]
+        )
+      );
+
+      const pData = [
+        abiCoder.encode(["string"], ["ParentDecent"]),
+        abiCoder.encode(["string"], ["pDCNT"]),
         abiCoder.encode(["address[]"], [[deployer.address, userA.address]]),
         abiCoder.encode(
           ["uint256[]"],
@@ -76,23 +116,50 @@ describe("Token Factory", function () {
         abiCoder.encode(["bytes32"], [ethers.utils.formatBytes32String("hi")]),
       ];
 
-      const result = await tokenFactory.callStatic.create(
+      const pResult = await tokenFactory.callStatic.create(
         deployer.address,
-        data
+        pData
       );
-      tx = await tokenFactory.create(deployer.address, data);
+      tx = await tokenFactory.create(deployer.address, pData);
       // eslint-disable-next-line camelcase
-      token = VotesToken__factory.connect(result[0], deployer);
-    });
+      pToken = VotesToken__factory.connect(pResult[0], deployer);
 
-    it("Token/Factory Deployed", async () => {
-      // eslint-disable-next-line no-unused-expressions
-      expect(tokenFactory.address).to.be.properAddress;
-      // eslint-disable-next-line no-unused-expressions
-      expect(token.address).to.be.properAddress;
-      await expect(tx)
-        .to.emit(tokenFactory, "TokenCreated")
-        .withArgs(token.address);
+      const cData = [
+        abiCoder.encode(["string"], ["ChildDecent"]),
+        abiCoder.encode(["string"], ["cDCNT"]),
+        abiCoder.encode(["address[]"], [[userB.address, predictedClaimSub]]),
+        abiCoder.encode(
+          ["uint256[]"],
+          [
+            [
+              ethers.utils.parseUnits("100", 18),
+              ethers.utils.parseUnits("100", 18),
+            ],
+          ]
+        ),
+        abiCoder.encode(["bytes32"], [ethers.utils.formatBytes32String("hi")]),
+      ];
+
+      const cResult = await tokenFactory.callStatic.create(
+        deployer.address,
+        cData
+      );
+      tx = await tokenFactory.create(deployer.address, cData);
+      // eslint-disable-next-line camelcase
+      cToken = VotesToken__factory.connect(cResult[0], deployer);
+      const upgraderRoleString = "UPGRADER_ROLE";
+      const daoRoleString = "DAO_ROLE";
+      await accessControl
+        .connect(deployer)
+        .initialize(
+          deployer.address,
+          [upgraderRoleString],
+          [daoRoleString],
+          [[upgrader.address]],
+          [predictedClaimSub],
+          ["upgradeTo(address)"],
+          [[upgraderRoleString]]
+        );
     });
 
     it("Can predict Token Address", async () => {
@@ -117,8 +184,8 @@ describe("Token Factory", function () {
             abiCoder.encode(
               ["string", "string", "address[]", "uint256[]"],
               [
-                "DECENT",
-                "DCNT",
+                "ParentDecent",
+                "pDCNT",
                 [deployer.address, userA.address],
                 [
                   ethers.utils.parseUnits("100", 18),
@@ -131,98 +198,143 @@ describe("Token Factory", function () {
       );
 
       // eslint-disable-next-line no-unused-expressions
-      expect(token.address).to.eq(predictedToken);
+      expect(pToken.address).to.eq(predictedToken);
     });
 
     it("Init is correct", async () => {
-      expect(await token.name()).to.eq("DECENT");
-      expect(await token.symbol()).to.eq("DCNT");
-      expect(await token.totalSupply()).to.eq(
+      expect(await pToken.name()).to.eq("ParentDecent");
+      expect(await pToken.symbol()).to.eq("pDCNT");
+      expect(await pToken.totalSupply()).to.eq(
         ethers.utils.parseUnits("250", 18)
       );
-      expect(await token.balanceOf(deployer.address)).to.eq(
+      expect(await pToken.balanceOf(deployer.address)).to.eq(
         ethers.utils.parseUnits("100", 18)
       );
-      expect(await token.balanceOf(userA.address)).to.eq(
+      expect(await pToken.balanceOf(userA.address)).to.eq(
         ethers.utils.parseUnits("150", 18)
+      );
+
+      expect(await cToken.name()).to.eq("ChildDecent");
+      expect(await cToken.symbol()).to.eq("cDCNT");
+      expect(await cToken.totalSupply()).to.eq(
+        ethers.utils.parseUnits("200", 18)
+      );
+      expect(await cToken.balanceOf(userB.address)).to.eq(
+        ethers.utils.parseUnits("100", 18)
       );
     });
 
-    it("Creates WSnap - Snap Initialized", async () => {
-      const token2 = await createWSnap();
+    it("Can predict Claim Sub", async () => {
+      await createClaim();
+      // eslint-disable-next-line no-unused-expressions
+      expect(claimSubsidiary.address).to.eq(predictedClaimSub);
+    });
+
+    it("Inits Snap", async () => {
+      await createClaim();
+      expect(await claimSubsidiary.accessControl()).to.eq(
+        accessControl.address
+      );
+      expect(await claimSubsidiary.cToken()).to.eq(cToken.address);
+
       expect(
         await (
-          await claimToken.cTokens(token.address, token2.address)
+          await claimSubsidiary.cTokenInfo(cToken.address)
+        ).pToken
+      ).to.eq(pToken.address);
+      expect(
+        await (
+          await claimSubsidiary.cTokenInfo(cToken.address)
         ).snapId
       ).to.eq(1);
       expect(
         await (
-          await claimToken.cTokens(token.address, token2.address)
+          await claimSubsidiary.cTokenInfo(cToken.address)
         ).pAllocation
-      ).to.eq(ethers.utils.parseUnits("800", 18));
+      ).to.eq(ethers.utils.parseUnits("100", 18));
     });
 
-    it("Creates WSnap - claim Snap", async () => {
-      const token2 = await createWSnap();
-      const amount = await claimToken.calculateClaimAmount(
-        token.address,
-        token2.address,
+    it("Claim Snap", async () => {
+      await createClaim();
+      const amount = await claimSubsidiary.calculateClaimAmount(
         deployer.address
       );
       // Claim on behalf
       await expect(
-        claimToken.connect(userB).claimSnap(token2.address, deployer.address)
-      ).to.emit(claimToken, "SnapClaimed");
+        claimSubsidiary.connect(userB).claimSnap(deployer.address)
+      ).to.emit(claimSubsidiary, "SnapClaimed");
       expect(
         await amount
+          .add(await await claimSubsidiary.calculateClaimAmount(userA.address))
           .add(
-            await await claimToken.calculateClaimAmount(
-              token.address,
-              token2.address,
-              userA.address
+            await await claimSubsidiary.calculateClaimAmount(
+              claimSubsidiary.address
             )
           )
-          .add(
-            await await claimToken.calculateClaimAmount(
-              token.address,
-              token2.address,
-              claimToken.address
-            )
-          )
-      ).to.eq(ethers.utils.parseUnits("800", 18));
-      expect(await token2.balanceOf(deployer.address)).to.eq(amount);
-      expect(await token2.balanceOf(claimToken.address)).to.eq(
-        ethers.utils.parseUnits("800", 18).sub(amount)
+      ).to.eq(ethers.utils.parseUnits("100", 18));
+      expect(await cToken.balanceOf(deployer.address)).to.eq(amount);
+      expect(await cToken.balanceOf(claimSubsidiary.address)).to.eq(
+        ethers.utils.parseUnits("100", 18).sub(amount)
       );
     });
 
     it("Should revert double claim", async () => {
-      const token2 = await createWSnap();
+      await createClaim();
+      await expect(claimSubsidiary.claimSnap(deployer.address)).to.emit(
+        claimSubsidiary,
+        "SnapClaimed"
+      );
       await expect(
-        claimToken.claimSnap(token2.address, deployer.address)
-      ).to.emit(claimToken, "SnapClaimed");
-      await expect(
-        claimToken.claimSnap(token2.address, deployer.address)
+        claimSubsidiary.connect(userA).claimSnap(deployer.address)
       ).to.revertedWith("This allocation has been claimed");
     });
 
     it("Should revert without an allocation", async () => {
-      const token2 = await createWSnap();
+      await createClaim();
+      await expect(claimSubsidiary.claimSnap(userB.address)).to.revertedWith(
+        "The claimer does not have an allocation"
+      );
+    });
+
+    it("Can be upgraded by an authorized user", async () => {
+      await createClaim();
+      const claimTwo = await new ClaimSubsidiary__factory(deployer).deploy();
       await expect(
-        claimToken.claimSnap(token2.address, userB.address)
-      ).to.revertedWith("The claimer does not have an allocation");
+        claimSubsidiary.connect(upgrader).upgradeTo(claimTwo.address)
+      ).to.emit(claimSubsidiary, "Upgraded");
+    });
+
+    it("Cannot be upgraded by an unauthorized user", async () => {
+      await createClaim();
+      const claimTwo = await new ClaimSubsidiary__factory(deployer).deploy();
+      await expect(
+        claimSubsidiary.connect(deployer).upgradeTo(claimTwo.address)
+      ).to.be.revertedWith("NotAuthorized()");
     });
 
     it("Supports the expected ERC165 interface", async () => {
+      await createClaim();
       expect(
         await tokenFactory.supportsInterface(
           // eslint-disable-next-line camelcase
-          getInterfaceSelector(ITokenFactory__factory.createInterface())
+          getInterfaceSelector(IModuleFactoryBase__factory.createInterface())
         )
       ).to.eq(true);
 
       // Supports ERC-165 interface
-      expect(await tokenFactory.supportsInterface("0x01ffc9a7")).to.eq(true);
+      expect(
+        await claimFactory.supportsInterface(
+          // eslint-disable-next-line camelcase
+          getInterfaceSelector(IModuleFactoryBase__factory.createInterface())
+        )
+      ).to.eq(true);
+
+      expect(
+        await claimSubsidiary.supportsInterface(
+          // eslint-disable-next-line camelcase
+          getInterfaceSelector(IModuleBase__factory.createInterface())
+        )
+      ).to.eq(true);
     });
   });
 });
