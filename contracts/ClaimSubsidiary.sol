@@ -1,77 +1,86 @@
 //SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.0;
 import "./interfaces/IClaimSubsidiary.sol";
+import "@fractal-framework/core-contracts/contracts/ModuleBase.sol";
 import "./VotesToken.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
-import "./TokenFactory.sol";
 
-contract ClaimSubsidiary is IClaimSubsidiary {
+contract ClaimSubsidiary is ModuleBase, IClaimSubsidiary {
     using SafeERC20 for IERC20;
 
-    mapping(address => mapping(address => ChildTokenInfo)) public cTokens; // pToken => cToken => snapId
-    mapping(address => address) public findMyDaddy;
+    address public cToken;
+    mapping(address => ChildTokenInfo) public cTokenInfo; // cToken => cTokenInfo
+
+    /// @notice Initilize Claim Contract
+    /// @param _accessControl Address of AccessControl
+    /// @param _pToken Address of the parent token used for snapshot reference
+    /// @param _cToken Address of child Token being claimed
+    /// @param _pAllocation Total tokens allocated for pToken holders
+    function initialize(
+        address _accessControl,
+        address _pToken,
+        address _cToken,
+        uint256 _pAllocation
+    ) external initializer {
+        __initBase(_accessControl, msg.sender, "Claim Subsidiary");
+        cToken = _cToken;
+        _createSubsidiary(_pToken, _cToken, _pAllocation);
+    }
 
     ////////////////////////// SnapShot //////////////////////////////////
     /// @notice This function creates a cToken and assigns a snapshot Id for pToken holder claims
-    /// @param tokenFactory The token factory which the developer wants to use to deploy token instances
-    /// @param createTokenData Name, symbol, holders, allocations for the new cToken
-    /// @param pToken Address of the parent token used for snapshot reference
-    /// @param pAllocation Total tokens allocated for pToken holders
-    /// @return cToken Address of the token created
-    function createSubsidiary(
-        address tokenFactory,
-        bytes[] calldata createTokenData,
-        address pToken,
-        uint256 pAllocation
-    ) external returns (address cToken) {
-        cToken = TokenFactory(tokenFactory).create(msg.sender, createTokenData)[
-                0
-            ];
-        require(
-            cTokens[pToken][cToken].snapId == 0,
-            "This token has already been initilized with a snapId"
-        );
-        uint256 snapId = VotesToken(pToken).captureSnapShot();
-        cTokens[pToken][cToken].snapId = snapId;
-        cTokens[pToken][cToken].pAllocation = pAllocation;
-        findMyDaddy[cToken] = pToken;
-        emit SnapAdded(pToken, cToken, pAllocation);
+    /// @param _pToken Address of the parent token used for snapshot reference
+    /// @param _cToken Address of child Token being claimed
+    /// @param _pAllocation Total tokens allocated for pToken holders
+    /// @return snapId snapId number
+    function _createSubsidiary(
+        address _pToken,
+        address _cToken,
+        uint256 _pAllocation
+    ) internal returns (uint256 snapId) {
+        snapId = VotesToken(_pToken).captureSnapShot();
+        cTokenInfo[_cToken].pToken = _pToken;
+        cTokenInfo[_cToken].snapId = snapId;
+        cTokenInfo[_cToken].pAllocation = _pAllocation;
+        emit SnapAdded(_pToken, _cToken, _pAllocation);
     }
 
     /// @notice This function allows pToken holders to claim cTokens
-    /// @param cToken Address of cToken
     /// @param claimer Address which is being claimed for
-    function claimSnap(address cToken, address claimer) external {
-        address pToken = findMyDaddy[cToken];
-        uint256 amount = calculateClaimAmount(pToken, cToken, claimer); // Get user balance
+    function claimSnap(address claimer) external {
+        uint256 amount = calculateClaimAmount(claimer); // Get user balance
         require(amount > 0, "The claimer does not have an allocation");
         require(
-            !cTokens[pToken][cToken].isSnapClaimed[claimer],
+            !cTokenInfo[cToken].isSnapClaimed[claimer],
             "This allocation has been claimed"
         );
-        cTokens[pToken][cToken].isSnapClaimed[claimer] = true;
+        cTokenInfo[cToken].isSnapClaimed[claimer] = true;
 
         IERC20(cToken).safeTransfer(claimer, amount); // transfer user balance
-        emit SnapClaimed(pToken, cToken, claimer, amount);
+        emit SnapClaimed(cTokenInfo[cToken].pToken, cToken, claimer, amount);
     }
 
     //////////////////// View Functions //////////////////////////
     /// @notice Calculate a users cToken allocation
-    /// @param pToken Address of pToken
-    /// @param cToken Address of cToken
     /// @param claimer Address which is being claimed for
-    /// @return cTokenAllocation Users cToken allocation  
-    function calculateClaimAmount(
-        address pToken,
-        address cToken,
-        address claimer
-    ) public view returns (uint256 cTokenAllocation) {
+    /// @return cTokenAllocation Users cToken allocation
+    function calculateClaimAmount(address claimer)
+        public
+        view
+        returns (uint256 cTokenAllocation)
+    {
         cTokenAllocation =
-            (VotesToken(pToken).balanceOfAt(
+            (VotesToken(cTokenInfo[cToken].pToken).balanceOfAt(
                 claimer,
-                cTokens[pToken][cToken].snapId
-            ) * cTokens[pToken][cToken].pAllocation) /
-            VotesToken(pToken).totalSupplyAt(cTokens[pToken][cToken].snapId);
+                cTokenInfo[cToken].snapId
+            ) * cTokenInfo[cToken].pAllocation) /
+            VotesToken(cTokenInfo[cToken].pToken).totalSupplyAt(
+                cTokenInfo[cToken].snapId
+            );
     }
+
+    /// @dev This empty reserved space is put in place to allow future versions to add new
+    /// variables without shifting down storage in the inheritance chain.
+    /// See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
+    uint256[48] private __gap;
 }
