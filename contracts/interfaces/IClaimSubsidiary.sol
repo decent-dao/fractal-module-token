@@ -3,6 +3,7 @@ pragma solidity ^0.8.0;
 
 interface IClaimSubsidiary {
     struct ChildTokenInfo {
+        address pToken;
         uint256 snapId;
         uint256 pAllocation;
         mapping(address => bool) isSnapClaimed;
@@ -15,34 +16,27 @@ interface IClaimSubsidiary {
         uint256 amount
     );
 
-        ////////////////////////// SnapShot //////////////////////////////////
-    /// @notice This function creates a cToken and assigns a snapshot Id for pToken holder claims
-    /// @param tokenFactory The token factory which the developer wants to use to deploy token instances
-    /// @param createTokenData Name, symbol, holders, allocations for the new cToken
-    /// @param pToken Address of the parent token used for snapshot reference
-    /// @param pAllocation Total tokens allocated for pToken holders
-    /// @return cToken Address of the token created
-    function createSubsidiary(
-        address tokenFactory,
-        bytes[] calldata createTokenData,
-        address pToken,
-        uint256 pAllocation
-    ) external returns (address cToken);
+    /// @param _accessControl Address of AccessControl
+    /// @param _pToken Address of the parent token used for snapshot reference
+    /// @param _cToken Address of child Token being claimed
+    /// @param _pAllocation Total tokens allocated for pToken holders
+    function initialize(
+        address _accessControl,
+        address _pToken,
+        address _cToken,
+        uint256 _pAllocation
+    ) external;
 
     /// @notice This function allows pToken holders to claim cTokens
-    /// @param cToken Address of cToken
     /// @param claimer Address which is being claimed for
-    function claimSnap(address cToken, address claimer) external;
+    function claimSnap(address claimer) external;
 
     //////////////////// View Functions //////////////////////////
     /// @notice Calculate a users cToken allocation
-    /// @param pToken Address of pToken
-    /// @param cToken Address of cToken
     /// @param claimer Address which is being claimed for
-    /// @return cTokenAllocation Users cToken allocation  
-    function calculateClaimAmount(
-        address pToken,
-        address cToken,
-        address claimer
-    ) external view returns (uint256 cTokenAllocation);
+    /// @return cTokenAllocation Users cToken allocation
+    function calculateClaimAmount(address claimer)
+        external
+        view
+        returns (uint256 cTokenAllocation);
 }
