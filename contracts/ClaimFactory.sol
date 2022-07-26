@@ -58,6 +58,7 @@ contract ClaimFactory is ModuleFactoryBase, IClaimFactory {
             )
         );
         ClaimSubsidiary(payable(createdSubsidiary)).initialize(
+            msg.sender, // metafactory
             accessControl,
             pToken,
             cToken,
