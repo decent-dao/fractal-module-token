@@ -12,7 +12,6 @@ import {
   DAOAccessControl__factory,
   ERC1967Proxy__factory,
   IModuleFactoryBase__factory,
-  IERC165__factory,
   IModuleBase__factory,
 } from "../typechain-types";
 import chai from "chai";
@@ -52,6 +51,9 @@ describe("Token Factory", function () {
       abiCoder.encode(["uint256"], [ethers.utils.parseUnits("100", 18)]),
       abiCoder.encode(["bytes32"], [ethers.utils.formatBytes32String("hi")]),
     ];
+
+    await cToken.approve(predictedClaimSub, ethers.utils.parseUnits("100", 18));
+
     const claimResult = await claimFactory.callStatic.create(
       deployer.address,
       claimData
@@ -62,6 +64,9 @@ describe("Token Factory", function () {
     claimSubsidiary = ClaimSubsidiary__factory.connect(
       claimResult[0],
       deployer
+    );
+    expect(await cToken.balanceOf(claimSubsidiary.address)).to.eq(
+      ethers.utils.parseUnits("100", 18)
     );
   }
 
@@ -127,7 +132,7 @@ describe("Token Factory", function () {
       const cData = [
         abiCoder.encode(["string"], ["ChildDecent"]),
         abiCoder.encode(["string"], ["cDCNT"]),
-        abiCoder.encode(["address[]"], [[userB.address, predictedClaimSub]]),
+        abiCoder.encode(["address[]"], [[userB.address, deployer.address]]),
         abiCoder.encode(
           ["uint256[]"],
           [
