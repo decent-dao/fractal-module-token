@@ -16,11 +16,14 @@ interface IClaimSubsidiary {
         uint256 amount
     );
 
+    /// @notice Initilize Claim Contract
+    /// @param _metaFactory Address funding claimContract
     /// @param _accessControl Address of AccessControl
     /// @param _pToken Address of the parent token used for snapshot reference
     /// @param _cToken Address of child Token being claimed
     /// @param _pAllocation Total tokens allocated for pToken holders
     function initialize(
+        address _metaFactory,
         address _accessControl,
         address _pToken,
         address _cToken,
