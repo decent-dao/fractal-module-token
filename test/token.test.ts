@@ -249,21 +249,11 @@ describe("Token Factory", function () {
       );
       expect(await claimSubsidiary.cToken()).to.eq(cToken.address);
 
-      expect(
-        await (
-          await claimSubsidiary.cTokenInfo(cToken.address)
-        ).pToken
-      ).to.eq(pToken.address);
-      expect(
-        await (
-          await claimSubsidiary.cTokenInfo(cToken.address)
-        ).snapId
-      ).to.eq(1);
-      expect(
-        await (
-          await claimSubsidiary.cTokenInfo(cToken.address)
-        ).pAllocation
-      ).to.eq(ethers.utils.parseUnits("100", 18));
+      expect(await claimSubsidiary.pToken()).to.eq(pToken.address);
+      expect(await claimSubsidiary.snapId()).to.eq(1);
+      expect(await claimSubsidiary.pAllocation()).to.eq(
+        ethers.utils.parseUnits("100", 18)
+      );
     });
 
     it("Claim Snap", async () => {
