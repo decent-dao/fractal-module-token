@@ -8,6 +8,8 @@ interface IClaimSubsidiary {
         uint256 pAllocation;
         mapping(address => bool) isSnapClaimed;
     }
+    error NoAllocation();
+    error AllocationClaimed();
     event SnapAdded(address pToken, address cToken, uint256 pAllocation);
     event SnapClaimed(
         address indexed pToken,
