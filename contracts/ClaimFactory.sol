@@ -27,25 +27,17 @@ contract ClaimFactory is ModuleFactoryBase, IClaimFactory {
 
         createdContracts[0] = _createClaimSubsidiary(
             abi.decode(data[0], (address)),
-            abi.decode(data[1], (address)),
             creator,
-            abi.decode(data[5], (bytes32)),
-            abi.decode(data[2], (address)),
-            abi.decode(data[3], (address)),
-            abi.decode(data[4], (uint256))
+            abi.decode(data[1], (bytes32))
         );
 
         return createdContracts;
     }
 
     function _createClaimSubsidiary(
-        address accessControl,
         address subImpl,
         address creator,
-        bytes32 salt,
-        address pToken,
-        address cToken,
-        uint256 pAllocation
+        bytes32 salt
     ) internal returns (address createdSubsidiary) {
         createdSubsidiary = Create2.deploy(
             0,
@@ -57,14 +49,6 @@ contract ClaimFactory is ModuleFactoryBase, IClaimFactory {
                 abi.encode(subImpl, "")
             )
         );
-        ClaimSubsidiary(payable(createdSubsidiary)).initialize(
-            msg.sender, // metafactory
-            accessControl,
-            pToken,
-            cToken,
-            pAllocation
-        );
         emit SubsidiaryCreated(createdSubsidiary);
-        return createdSubsidiary;
     }
 }
