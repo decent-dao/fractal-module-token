@@ -13,6 +13,7 @@ import {
   ERC1967Proxy__factory,
   IModuleFactoryBase__factory,
   IModuleBase__factory,
+  IClaimSubsidiary__factory,
 } from "../typechain-types";
 import chai from "chai";
 import { ethers } from "hardhat";
@@ -44,11 +45,7 @@ describe("Token Factory", function () {
   async function createClaim() {
     const abiCoder = new ethers.utils.AbiCoder();
     const claimData = [
-      abiCoder.encode(["address"], [accessControl.address]),
       abiCoder.encode(["address"], [claimSubImpl.address]),
-      abiCoder.encode(["address"], [pToken.address]), // pToken
-      abiCoder.encode(["address"], [cToken.address]),
-      abiCoder.encode(["uint256"], [ethers.utils.parseUnits("100", 18)]),
       abiCoder.encode(["bytes32"], [ethers.utils.formatBytes32String("hi")]),
     ];
 
@@ -64,6 +61,13 @@ describe("Token Factory", function () {
     claimSubsidiary = ClaimSubsidiary__factory.connect(
       claimResult[0],
       deployer
+    );
+    await claimSubsidiary.initialize(
+      deployer.address,
+      accessControl.address,
+      pToken.address,
+      cToken.address,
+      ethers.utils.parseUnits("100", 18)
     );
     expect(await cToken.balanceOf(claimSubsidiary.address)).to.eq(
       ethers.utils.parseUnits("100", 18)
@@ -227,6 +231,9 @@ describe("Token Factory", function () {
       expect(await cToken.balanceOf(userB.address)).to.eq(
         ethers.utils.parseUnits("100", 18)
       );
+      expect(await cToken.balanceOf(deployer.address)).to.eq(
+        ethers.utils.parseUnits("100", 18)
+      );
     });
 
     it("Can predict Claim Sub", async () => {
@@ -338,6 +345,13 @@ describe("Token Factory", function () {
         await claimSubsidiary.supportsInterface(
           // eslint-disable-next-line camelcase
           getInterfaceSelector(IModuleBase__factory.createInterface())
+        )
+      ).to.eq(true);
+
+      expect(
+        await claimSubsidiary.supportsInterface(
+          // eslint-disable-next-line camelcase
+          getInterfaceSelector(IClaimSubsidiary__factory.createInterface())
         )
       ).to.eq(true);
     });
