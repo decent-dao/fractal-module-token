@@ -25,6 +25,7 @@ contract ClaimSubsidiary is ModuleBase, IClaimSubsidiary {
         uint256 _pAllocation
     ) external initializer {
         __initBase(_accessControl, msg.sender, "Claim Subsidiary");
+        _registerInterface(type(IClaimSubsidiary).interfaceId);
         cToken = _cToken;
         _createSubsidiary(_metaFactory, _pToken, _cToken, _pAllocation);
     }
