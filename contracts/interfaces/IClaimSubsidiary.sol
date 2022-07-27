@@ -2,12 +2,6 @@
 pragma solidity ^0.8.0;
 
 interface IClaimSubsidiary {
-    struct ChildTokenInfo {
-        address pToken;
-        uint256 snapId;
-        uint256 pAllocation;
-        mapping(address => bool) isSnapClaimed;
-    }
     error NoAllocation();
     error AllocationClaimed();
     event SnapAdded(address pToken, address cToken, uint256 pAllocation);
