@@ -23,19 +23,13 @@ contract TokenFactory is ModuleFactoryBase, ITokenFactory {
     {
         address[] memory createdContracts = new address[](1);
 
-        string memory name = abi.decode(data[0], (string));
-        string memory symbol = abi.decode(data[1], (string));
-        address[] memory hodlers = abi.decode(data[2], (address[]));
-        uint256[] memory allocations = abi.decode(data[3], (uint256[]));
-        bytes32 salt = abi.decode(data[4], (bytes32));
-
         createdContracts[0] = _createToken(
             creator,
-            salt,
-            name,
-            symbol,
-            hodlers,
-            allocations
+            abi.decode(data[4], (bytes32)),
+            abi.decode(data[0], (string)),
+            abi.decode(data[1], (string)),
+            abi.decode(data[2], (address[])),
+            abi.decode(data[3], (uint256[]))
         );
 
         return createdContracts;
