@@ -298,13 +298,13 @@ describe("Token Factory", function () {
       );
       await expect(
         claimSubsidiary.connect(userA).claimSnap(deployer.address)
-      ).to.revertedWith("This allocation has been claimed");
+      ).to.revertedWith("AllocationClaimed()");
     });
 
     it("Should revert without an allocation", async () => {
       await createClaim();
       await expect(claimSubsidiary.claimSnap(userB.address)).to.revertedWith(
-        "The claimer does not have an allocation"
+        "NoAllocation()"
       );
     });
 
