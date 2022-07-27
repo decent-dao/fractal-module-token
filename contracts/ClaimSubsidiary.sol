@@ -31,36 +31,14 @@ contract ClaimSubsidiary is ModuleBase, IClaimSubsidiary {
     }
 
     ////////////////////////// SnapShot //////////////////////////////////
-    /// @notice This function creates a cToken and assigns a snapshot Id for pToken holder claims
-    /// @param _pToken Address of the parent token used for snapshot reference
-    /// @param _cToken Address of child Token being claimed
-    /// @param _pAllocation Total tokens allocated for pToken holders
-    /// @return snapId snapId number
-    function _createSubsidiary(
-        address _metaFactory,
-        address _pToken,
-        address _cToken,
-        uint256 _pAllocation
-    ) internal returns (uint256 snapId) {
-        IERC20(_cToken).transferFrom(_metaFactory, address(this), _pAllocation);
-        snapId = VotesToken(_pToken).captureSnapShot();
-        cTokenInfo[_cToken].pToken = _pToken;
-        cTokenInfo[_cToken].snapId = snapId;
-        cTokenInfo[_cToken].pAllocation = _pAllocation;
-        emit SnapAdded(_pToken, _cToken, _pAllocation);
-    }
-
     /// @notice This function allows pToken holders to claim cTokens
     /// @param claimer Address which is being claimed for
     function claimSnap(address claimer) external {
         uint256 amount = calculateClaimAmount(claimer); // Get user balance
-        require(amount > 0, "The claimer does not have an allocation");
-        require(
-            !cTokenInfo[cToken].isSnapClaimed[claimer],
-            "This allocation has been claimed"
-        );
+        if (amount == 0) revert NoAllocation();
+        if (cTokenInfo[cToken].isSnapClaimed[claimer])
+            revert AllocationClaimed();
         cTokenInfo[cToken].isSnapClaimed[claimer] = true;
-
         IERC20(cToken).safeTransfer(claimer, amount); // transfer user balance
         emit SnapClaimed(cTokenInfo[cToken].pToken, cToken, claimer, amount);
     }
@@ -82,6 +60,26 @@ contract ClaimSubsidiary is ModuleBase, IClaimSubsidiary {
             VotesToken(cTokenInfo[cToken].pToken).totalSupplyAt(
                 cTokenInfo[cToken].snapId
             );
+    }
+
+    //////////////////// Internal Functions //////////////////////////
+    /// @notice This function creates a cToken and assigns a snapshot Id for pToken holder claims
+    /// @param _pToken Address of the parent token used for snapshot reference
+    /// @param _cToken Address of child Token being claimed
+    /// @param _pAllocation Total tokens allocated for pToken holders
+    /// @return snapId snapId number
+    function _createSubsidiary(
+        address _metaFactory,
+        address _pToken,
+        address _cToken,
+        uint256 _pAllocation
+    ) internal returns (uint256 snapId) {
+        IERC20(_cToken).transferFrom(_metaFactory, address(this), _pAllocation);
+        snapId = VotesToken(_pToken).captureSnapShot();
+        cTokenInfo[_cToken].pToken = _pToken;
+        cTokenInfo[_cToken].snapId = snapId;
+        cTokenInfo[_cToken].pAllocation = _pAllocation;
+        emit SnapAdded(_pToken, _cToken, _pAllocation);
     }
 
     /// @dev This empty reserved space is put in place to allow future versions to add new
