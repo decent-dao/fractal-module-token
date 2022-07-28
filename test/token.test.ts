@@ -286,9 +286,15 @@ describe("Token Factory", function () {
         claimSubsidiary,
         "SnapClaimed"
       );
+      expect(
+        await claimSubsidiary.calculateClaimAmount(deployer.address)
+      ).to.eq(0);
       await expect(
         claimSubsidiary.connect(userA).claimSnap(deployer.address)
-      ).to.revertedWith("AllocationClaimed()");
+      ).to.revertedWith("NoAllocation()");
+      await expect(claimSubsidiary.claimSnap(deployer.address)).to.revertedWith(
+        "NoAllocation()"
+      );
     });
 
     it("Should revert without an allocation", async () => {
