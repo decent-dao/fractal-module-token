@@ -39,7 +39,6 @@ contract ClaimSubsidiary is ModuleBase, IClaimSubsidiary {
     function claimSnap(address claimer) external {
         uint256 amount = calculateClaimAmount(claimer); // Get user balance
         if (amount == 0) revert NoAllocation();
-        if (isSnapClaimed[claimer]) revert AllocationClaimed();
         isSnapClaimed[claimer] = true;
         IERC20(cToken).safeTransfer(claimer, amount); // transfer user balance
         emit SnapClaimed(pToken, cToken, claimer, amount);
@@ -54,7 +53,7 @@ contract ClaimSubsidiary is ModuleBase, IClaimSubsidiary {
         view
         returns (uint256 cTokenAllocation)
     {
-        cTokenAllocation =
+        cTokenAllocation = isSnapClaimed[claimer] ? 0 :
             (VotesToken(pToken).balanceOfAt(claimer, snapId) * pAllocation) /
             VotesToken(pToken).totalSupplyAt(snapId);
     }
